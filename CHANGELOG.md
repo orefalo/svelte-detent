@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- **Svelte 5**: new package `@hayderkg/detent-svelte` (`svelte/`) with `<Detent>`, `<DetentText>`, `<DetentNumber>`
+  and the headless `createDetent`. Same engine, physics, props and accessibility as the React components; rows,
+  header, footer and indicator content are snippets, `value` is `bind:`able.
+- New framework-free entry `@hayderkg/detent/core` (physics, engine, presets, rolling-label controllers). React and
+  react-dom are now optional peer dependencies. No change to the React API.
+
 ## 0.1.1
 
 - Types for `@hayderkg/detent/text`, `/number` and `/feedback` resolve under TypeScript's older `node10`

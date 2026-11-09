@@ -14,6 +14,30 @@ Docs, playground and examples: **[detent.hayder.sh](https://detent.hayder.sh)**.
 npm i @hayderkg/detent
 ```
 
+### Svelte 5
+
+```sh
+npm i @hayderkg/detent-svelte @hayderkg/detent
+```
+
+```svelte
+<script>
+  import { Detent, DetentText, DetentNumber } from '@hayderkg/detent-svelte'
+  let month = $state('Mar')
+</script>
+
+<Detent items={['Jan', 'Feb', 'Mar', 'Apr']} bind:value={month} label="Month">
+  {#snippet item(name, { selected })}<span class:on={selected}>{name}</span>{/snippet}
+</Detent>
+
+<DetentText text={month} />
+<DetentNumber value={1234.5} format={{ style: 'currency', currency: 'USD' }} />
+```
+
+The props match the React component. Differences: `renderItem` is the `item` snippet, `renderIndicator` is
+`indicatorContent`, `header`/`footer`/`emptyState`/`loadingRow` are snippets, `DetentText` takes `text` instead of
+children, `class`/`style` are strings (or style objects). `createDetent(() => options)` is the headless version.
+
 ## Quickstart
 
 The styled component looks finished with no styling props (light and dark, a subtle drum, an iOS-style magnifying lens, soft edges). Give it `items` and a `label`, its accessible name:
