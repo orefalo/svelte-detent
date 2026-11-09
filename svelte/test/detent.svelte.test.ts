@@ -1,4 +1,4 @@
-import { flushSync, mount, tick, unmount } from 'svelte'
+import { flushSync, mount, tick, unmount, type Component } from 'svelte'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render } from 'svelte/server'
 import { Detent, DetentNumber, DetentText, type DetentApi } from '../src/lib'
@@ -7,7 +7,8 @@ import Probe from './Probe.svelte'
 
 const letters = ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H']
 const mounted: Record<string, unknown>[] = []
-function show<P extends Record<string, unknown>>(component: Parameters<typeof mount>[0], props: P) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function show<P extends Record<string, unknown>>(component: Component<any>, props: P) {
   const host = document.createElement('div')
   document.body.append(host)
   const app = mount(component, { target: host, props })
