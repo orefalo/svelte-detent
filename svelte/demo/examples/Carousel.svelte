@@ -23,13 +23,14 @@
   const cover = $derived(mode === 'cover')
   const index = $derived(paintings.findIndex((p) => p.id === value.id))
 
-  /** Cover flow: side cards turn toward the center and pack close behind it; nearer cards stack on top. */
-  const coverRow = (offset: number) => {
+  /** Cover flow: side cards turn toward the center and pack close behind it; nearer cards stack on top. In RTL the rows run the other way, so the step and the turn mirror. */
+  const coverRow = (offset: number, rtl: boolean) => {
     const o = Math.abs(offset)
     const s = Math.sign(offset)
-    const pull = o >= 1 ? 54 * o - 22 : 32 * o // from the row's own slot toward the center, px
+    const flip = rtl ? -1 : 1
+    const pull = o >= 1 ? 52 * o - 55 : -3 * o // from the row's own slot toward the center, px
     return {
-      transform: `perspective(520px) translateX(${-s * pull}px) rotateY(${-s * Math.min(1, o) * 58}deg) scale(${1 - 0.15 * Math.min(1, o)})`,
+      transform: `perspective(520px) translateX(${-s * pull * flip}px) rotateY(${-s * Math.min(1, o) * 58 * flip}deg) scale(${1 - 0.1 * Math.min(1, o)})`,
       zIndex: Math.round(100 - o * 10),
     }
   }
@@ -62,7 +63,7 @@
     centerLight={cover ? false : 0.06}
     selectedDepth={cover ? false : 12}
     elasticRows={!cover}
-    rowStyle={cover ? coverRow : undefined}
+    rowStyle={cover ? (offset) => coverRow(offset, rtl) : undefined}
   >
     {#snippet item(p: Painting)}
       <figure class:cover>
@@ -93,7 +94,7 @@
   .carousel { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 14px; width: 100%; }
   figure { margin: 0; padding: 0 8px; width: 100%; box-sizing: border-box; }
   img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 16px; box-shadow: 0 1px 2px rgb(0 0 0 / 0.06), 0 8px 20px -8px rgb(0 0 0 / 0.2); user-select: none; }
-  figure.cover { padding: 0; width: 148px; }
+  figure.cover { padding: 0; width: 148px; flex: none; }
   figcaption { display: grid; padding: 8px 4px 0; text-align: start; }
   figcaption b { font-size: 14px; font-weight: 600; }
   figcaption span { font-size: 12px; opacity: 0.6; }

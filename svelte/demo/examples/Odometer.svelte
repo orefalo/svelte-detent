@@ -1,9 +1,16 @@
 <script lang="ts">
   // In your app: import { Detent } from '@hayderkg/detent-svelte'
   import { Detent } from '../../src/lib'
+  import { onMount } from 'svelte'
 
   const digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
   let count = $state(987_634)
+
+  // A live number: a new random value every 3 seconds (6 digits at most, below 1,000,000).
+  onMount(() => {
+    const id = setInterval(() => (count = Math.floor(Math.random() * 1_000_000)), 3000)
+    return () => clearInterval(id)
+  })
 
   /** The number as a row of places, keyed from the right so a digit keeps its wheel when the number grows. */
   const places = $derived.by(() => {

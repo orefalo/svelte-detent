@@ -31,7 +31,8 @@
 
   let commits = $state<Commit[]>(Array.from({ length: PAGE }, (_, i) => commit(i)))
   let loading = $state(false)
-  let selected = $state<Commit | undefined>()
+  // Starts on the fourth commit, so there are rows above it too.
+  let selected = $state<Commit | undefined>(commits[3])
 
   function more() {
     if (loading) return
