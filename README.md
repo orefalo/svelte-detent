@@ -1,6 +1,12 @@
+# Port to Svelte
+
+This is an unofficial port of detent to Svelte.
+
+Claude code takes all the credit for the conversion. The original code is well written and I got it working in perfectly in about 10 prompts.
+
 # detent
 
-A wheel picker for React that clicks into place.
+A wheel picker for Svelte and React that clicks into place.
 
 Custom physics (not `scroll-snap`): real inertia, a throw that lands exactly on a row with no visible correction, rubber-banded ends, and frame-rate independent motion at 60, 120 and 144 Hz. Vertical and horizontal, RTL-aware, accessible, zero dependencies.
 
