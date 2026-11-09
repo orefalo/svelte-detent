@@ -2,6 +2,11 @@ import { align, measure, segments, type Layout, type Piece } from './layout'
 import { axis, copy, fadeWindow, move, roll, sample, type Axis, type RollOptions } from './roll'
 
 export interface TextOptions extends RollOptions {
+  /**
+   * New letters grow into place from zero width (default), so they appear clipped while they roll in.
+   * `false`: they arrive at full width and only rise into place.
+   */
+  reveal?: boolean
   morph: boolean
   locale?: string
   rollDirection: 'up' | 'down'
@@ -23,11 +28,11 @@ export function textController(root: HTMLElement, content: HTMLElement, layer: H
     const node = document.createElement('span')
     node.setAttribute('data-detent-text-part', piece.text)
     Object.assign(node.style, { position: 'absolute', overflow: 'hidden',
-      transform: `translateX(${piece.left}px)`, width: `${appearing ? 0 : piece.width}px` })
+      transform: `translateX(${piece.left}px)`, width: `${appearing && o.reveal !== false ? 0 : piece.width}px` })
     layer.append(node)
     const row = leaf(piece, source, true, appearing ? source.height * (o.rollDirection === 'up' ? 1 : -1) : 0)
     node.append(row.node)
-    const part = { node, text: piece.text, x: axis(piece.left), width: axis(appearing ? 0 : piece.width), rows: [row] }
+    const part = { node, text: piece.text, x: axis(piece.left), width: axis(appearing && o.reveal !== false ? 0 : piece.width), rows: [row] }
     place(part, source)
     return part
   }

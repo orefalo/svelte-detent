@@ -9,6 +9,8 @@
     as?: 'span' | 'div' | 'p' | 'label' | 'strong' | 'em' | 'small' | 'output' | 'code' | 'pre' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
     /** Keep matching graphemes; false rolls the entire label. Default true. */
     morph?: boolean
+    /** New letters grow in from zero width (so they look clipped while they roll). Default false: they arrive at full width and rise into place. */
+    reveal?: boolean
     /** Disable transitions. Reduced motion is always respected. */
     animate?: boolean
     /** Locale used for grapheme segmentation; format numbers before passing them if needed. */
@@ -32,6 +34,7 @@
     text,
     as = 'span',
     morph = true,
+    reveal = false,
     animate = true,
     locale,
     spring,
@@ -68,6 +71,7 @@
   $effect(() => {
     const options: TextOptions = {
       morph,
+      reveal,
       animate,
       locale,
       rollDirection,
@@ -82,6 +86,7 @@
   })
 </script>
 
+<!-- The two inner spans must touch: the root is white-space: pre, so any whitespace between them would be drawn as a space and widen the label. -->
 <svelte:element
   this={as}
   {...rest}
@@ -94,6 +99,5 @@
   data-detent-text=""
   bind:this={ref}
 >
-  <span bind:this={content} data-detent-text-content="" style="display:inline-block;white-space:pre;width:max-content;min-height:1lh">{label}</span>
-  <span bind:this={layer} data-detent-text-layer="" aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;user-select:none"></span>
+  <span bind:this={content} data-detent-text-content="" style="display:inline-block;white-space:pre;width:max-content;min-height:1lh">{label}</span><span bind:this={layer} data-detent-text-layer="" aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;user-select:none"></span>
 </svelte:element>

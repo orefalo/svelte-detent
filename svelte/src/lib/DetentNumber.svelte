@@ -107,6 +107,7 @@
   })
 </script>
 
+<!-- The two inner spans must touch: the root is white-space: pre, so any whitespace between them would be drawn as a space and widen the label. -->
 <svelte:element
   this={as}
   {...rest}
@@ -120,6 +121,5 @@
   data-detent-number=""
   bind:this={ref}
 >
-  <span bind:this={content} data-detent-number-content="" style="display:inline-block;white-space:pre;width:max-content;min-height:1lh">{#if classNames}{#each parts as p, i (i)}<span class={classNames[partOf(p.type) as NumberPart]}>{p.value}</span>{/each}{:else}{label}{/if}</span>
-  <span bind:this={layer} data-detent-number-layer="" aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;user-select:none"></span>
+  <span bind:this={content} data-detent-number-content="" style="display:inline-block;white-space:pre;width:max-content;min-height:1lh">{#if classNames}{#each parts as p, i (i)}<span class={classNames[partOf(p.type) as NumberPart]}>{p.value}</span>{/each}{:else}{label}{/if}</span><span bind:this={layer} data-detent-number-layer="" aria-hidden="true" style="position:absolute;inset:0;pointer-events:none;user-select:none"></span>
 </svelte:element>
