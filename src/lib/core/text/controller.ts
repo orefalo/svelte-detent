@@ -118,7 +118,7 @@ export function textController(root: HTMLElement, content: HTMLElement, layer: H
           part.node.append(row.node)
           part.rows.push(row)
         } else if (piece) {
-          const row = part.rows.find((row) => row.incoming)!
+          const row = part.rows.find((r) => r.incoming)!
           row.node.textContent = measured.text
           row.node.style.left = `${-piece.left}px`
         }

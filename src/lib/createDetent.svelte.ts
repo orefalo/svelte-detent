@@ -189,10 +189,10 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
   function onMode(m: Mode) {
     if (root) root.dataset.state = m
     if (track) track.style.willChange = m === 'idle' ? '' : 'transform'
-    const moving = m !== 'idle'
-    if (moving !== spinning) {
-      spinning = moving
-      if (moving) o.onSpinStart?.()
+    const active = m !== 'idle'
+    if (active !== spinning) {
+      spinning = active
+      if (active) o.onSpinStart?.()
       else o.onSpinEnd?.()
     }
     publish(engine.v)

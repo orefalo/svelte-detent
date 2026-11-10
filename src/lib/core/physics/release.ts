@@ -58,7 +58,7 @@ export function release(x: number, v: number, size: number, b: Bounds, o: Releas
   const T = tau(o.decay)
   const projected = x + v * T
   let index = nearest(Math.round(projected / size), b, v)
-  if (index !== index) index = Math.round(x / size) // nothing enabled: settle on the nearest row
+  if (Number.isNaN(index)) index = Math.round(x / size) // nothing enabled: settle on the nearest row
   const X = index * size
   const lo = b.min * size
   const hi = b.max * size

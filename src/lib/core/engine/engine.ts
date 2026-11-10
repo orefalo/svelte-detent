@@ -217,7 +217,7 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
     // The nearest enabled item, counted the way round the end when looping (in a loop of 5, item 4 is one step
     // from item 0).
     const n = nearest(Math.round(item), bounds())
-    if (n !== n) return // nothing enabled
+    if (Number.isNaN(n)) return // nothing enabled
     if (!o.loop) return goTo(n, animate)
     const i = mod(n, o.count)
     const base = motion ? target : center()
@@ -230,7 +230,7 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
   function step(rows: number) {
     const base = motion ? target : center()
     const next = nearest(base + rows, bounds(), rows)
-    if (next === next && next !== base) goTo(next)
+    if (!Number.isNaN(next) && next !== base) goTo(next)
   }
 
   /** Events from form fields inside rows (e.g. a search header) belong to the field, not the wheel. */
@@ -278,7 +278,9 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
       start = axis(e) // start from here: no jump by the threshold
       try {
         el?.setPointerCapture(e.pointerId)
-      } catch {}
+      } catch {
+        // capture can fail if the pointer is already gone
+      }
       el?.setAttribute('data-dragging', '')
       setMode('drag')
     }
@@ -396,8 +398,8 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
       // physics glide and land, with a shorter coast than a throw (when the mouse wheel stops, so should we).
       const r = a / Math.max(8, Math.min(100, gap))
       rate = rate ? rate + (r - rate) * 0.5 : r
-      const target = Math.sign(delta) * Math.min(p.maxVelocity, WHEEL_GAIN * rate * size())
-      return fling(v * target > 0 ? v + (target - v) * 0.5 : target, undefined, WHEEL_DECAY)
+      const aim = Math.sign(delta) * Math.min(p.maxVelocity, WHEEL_GAIN * rate * size())
+      return fling(v * aim > 0 ? v + (aim - v) * 0.5 : aim, undefined, WHEEL_DECAY)
     }
     // Smooth (trackpad, incl. OS momentum): follow it 1:1 along our axis only (a two-finger swipe always
     // carries some cross-axis motion, which must not leak in), settle once it goes quiet.
@@ -438,13 +440,13 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
       carry = 0
       return step(dir)
     }
-    let rate = 1
-    for (const [ms, r] of a === true ? ACCEL : a) if (e.timeStamp - heldAt >= ms) rate = r
-    const rows = Math.floor((carry += rate))
+    let speed = 1
+    for (const [ms, r] of a === true ? ACCEL : a) if (e.timeStamp - heldAt >= ms) speed = r
+    const rows = Math.floor((carry += speed))
     carry -= rows
     // Never far ahead of what is on screen (2 + 2 × rate rows, so plain repeats are never held back): when the
     // key comes up, the wheel settles on its spring instead of trailing on for seconds.
-    if (rows && Math.abs((motion ? target : center()) - raw / size()) < 2 + 2 * rate) step(dir * rows)
+    if (rows && Math.abs((motion ? target : center()) - raw / size()) < 2 + 2 * speed) step(dir * rows)
   }
 
   function key(e: KeyboardEvent) {
@@ -460,16 +462,16 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
     else if (k === 'PageDown') step(page)
     else if (k === 'PageUp') step(-page)
     else if (k === 'Home' || k === 'End') {
-      const end = k === 'End'
+      const last = k === 'End'
       const flat = { ...b, loop: false, min: o.loop ? 0 : lo(), max: o.loop ? o.count - 1 : hi() }
-      const i = nearest(end ? flat.max : flat.min, flat, end ? -1 : 1)
-      if (i === i) scrollTo(i)
+      const i = nearest(last ? flat.max : flat.min, flat, last ? -1 : 1)
+      if (!Number.isNaN(i)) scrollTo(i)
     } else if (o.getLabel && k.length === 1 && o.count && e.target === el) {
       typed = e.timeStamp - typedAt > TYPEAHEAD_RESET ? k.toLowerCase() : typed + k.toLowerCase()
       typedAt = e.timeStamp
-      const from = mod(motion ? target : center(), o.count)
+      const origin = mod(motion ? target : center(), o.count)
       for (let j = typed.length > 1 ? 0 : 1; j <= o.count; j++) {
-        const i = mod(from + j, o.count)
+        const i = mod(origin + j, o.count)
         if ((!o.isEnabled || o.isEnabled(i)) && o.getLabel(i).toLowerCase().startsWith(typed)) {
           scrollTo(i)
           break

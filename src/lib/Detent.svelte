@@ -118,7 +118,6 @@
   const alpha = $derived(radius ? 2 * Math.asin(Math.min(1, pitch / (2 * radius))) : (curvature * 1.3) / (half + 0.5))
   const drum = $derived(P > 0 && alpha > 1e-4)
   const R = $derived(radius ?? pitch / (2 * Math.sin(alpha / 2)))
-  const base = $derived(half * pitch)
   const extent = $derived(pitch * visibleCount)
   const zoom = $derived(magnify === true ? 1.1 : magnify || 0)
   const dir = $derived(d.rtl && !vertical ? -1 : 1)
