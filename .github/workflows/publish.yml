@@ -1,0 +1,30 @@
+name: Publish to npm
+
+# Push a tag like `svelte-v0.1.1` (matching package.json) to publish.
+# Uses npm trusted publishing (OIDC): no token is stored in the repo.
+on:
+  push:
+    tags: ['svelte-v*']
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - name: The tag must match package.json
+        run: test "svelte-v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check
+      - run: pnpm test
+      - run: pnpm build
+      - run: npm publish --provenance --access public

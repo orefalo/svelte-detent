@@ -204,6 +204,10 @@ pnpm build        # the package into dist/
 pnpm build:demo   # the examples site into demo-dist/
 ```
 
+To release: bump `version` in `package.json`, commit, then push a tag `svelte-vX.Y.Z` (matching it). The `Publish to npm`
+workflow checks, tests, builds and publishes with provenance. One-time setup: on npmjs.com, open the package's
+Settings → Trusted publisher, and add GitHub repo `orefalo/svelte-detent` with workflow `publish.yml`.
+
 The framework-free engine lives in `src/lib/core`, the Svelte layer in `src/lib`, and the examples and docs site in `demo/` (the docs are `demo/docs/docs.md`). Opening `/?e=Carousel` mounts a single example on its own.
 
 ## License
