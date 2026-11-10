@@ -13,6 +13,6 @@ export default defineConfig(({ command }) => ({
   build: {
     outDir: here('../demo-dist'),
     emptyOutDir: true,
-    rollupOptions: { input: { main: here('index.html'), examples: here('examples/index.html') } },
+    rollupOptions: { input: { main: here('index.html'), examples: here('examples/index.html'), docs: here('docs/index.html') } },
   },
 }))

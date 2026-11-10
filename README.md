@@ -4,7 +4,7 @@ A wheel picker for Svelte 5 that clicks into place.
 
 Custom physics (not `scroll-snap`): real inertia, a throw that lands exactly on a row with no visible correction, rubber-banded ends, and frame-rate independent motion at 60, 120 and 144 Hz. Vertical and horizontal, RTL-aware, accessible, no runtime dependencies.
 
-**[Live examples →](https://orefalo.github.io/svelte-detent/examples/)** (30 recipes: iOS pickers, odometers, carousels, radio dials, time zones…)
+**[Live examples →](https://orefalo.github.io/svelte-detent/examples/)** · **[Docs →](https://orefalo.github.io/svelte-detent/docs/)** (30 recipes: iOS pickers, odometers, carousels, radio dials, time zones…)
 
 This is an unofficial Svelte 5 port of [detent](https://github.com/hayderkg/detent) by Hayder, which is React-only. The engine, physics and rolling-label controllers come from there, and the examples reproduce [detent.hayder.sh/examples](https://detent.hayder.sh/examples). The conversion was done with Claude Code. All credit for the design belongs to the original author. Thanks, Hayder.
 
@@ -204,7 +204,7 @@ pnpm build        # the package into dist/
 pnpm build:demo   # the examples site into demo-dist/
 ```
 
-The framework-free engine lives in `src/lib/core`, the Svelte layer in `src/lib`, and the examples in `demo/`. Opening `/?e=Carousel` mounts a single example on its own.
+The framework-free engine lives in `src/lib/core`, the Svelte layer in `src/lib`, and the examples and docs site in `demo/` (the docs are `demo/docs/docs.md`). Opening `/?e=Carousel` mounts a single example on its own.
 
 ## License
 

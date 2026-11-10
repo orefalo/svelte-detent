@@ -1,4 +1,5 @@
 <script lang="ts">
+  import Header from './Header.svelte'
   import type { Component } from 'svelte'
   import { intro, sections } from './sections'
 
@@ -31,20 +32,9 @@
     document.querySelectorAll('article[id]').forEach((el) => io.observe(el))
     return () => io.disconnect()
   })
-  const base = import.meta.env.BASE_URL
-  const site = 'https://detent.hayder.sh'
 </script>
 
-<header>
-  <nav>
-    <a class="logo" href="{base}examples/">svelte-detent</a>
-    <a class="on" href="{base}examples/">Examples</a>
-    <a href="{site}/playground">Playground</a>
-    <a href="{site}/docs">Docs</a>
-    <a href="{site}/showcase">Showcase</a>
-    <a href="https://github.com/hayderkg/detent" aria-label="GitHub">GitHub</a>
-  </nav>
-</header>
+<Header current="examples" />
 
 <aside aria-label="Examples">
   {#each all as e (e.id)}<a href="#{e.id}" class:on={active === e.id} aria-label={e.title}></a>{/each}
@@ -74,13 +64,6 @@
 </main>
 
 <style>
-  :global(html) { scroll-behavior: smooth; }
-  :global(body) { margin: 0; background: #fff; color: #0a0a0a; font-family: Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased; }
-  header { position: sticky; top: 0; z-index: 50; backdrop-filter: blur(12px); background: rgb(255 255 255 / 0.8); }
-  nav { max-width: 520px; margin: 0 auto; display: flex; align-items: center; gap: 20px; height: 56px; font-size: 14px; }
-  nav a { color: #666; text-decoration: none; }
-  nav a:hover, nav a.on { color: #0a0a0a; }
-  .logo { font: italic 600 26px/1 Newsreader, Georgia, serif; color: #0a0a0a; margin-right: auto; letter-spacing: -0.02em; }
   main { max-width: 520px; margin: 0 auto; padding: 24px 0 160px; }
   h1, h2, h3 { margin: 0; font-size: 14px; font-weight: 600; }
   h1 { font-size: 28px; letter-spacing: -0.02em; }
@@ -96,11 +79,8 @@
   aside { position: fixed; left: 28px; top: 230px; display: grid; gap: 14px; }
   aside a { display: block; width: 12px; height: 2px; background: #ccc; border-radius: 1px; transition: width 0.2s, background 0.2s; }
   aside a.on { width: 22px; background: #0a0a0a; }
-  @media (max-width: 1000px) { aside { display: none; } nav, main { padding-inline: 16px; box-sizing: border-box; } }
+  @media (max-width: 1000px) { aside { display: none; } main { padding-inline: 16px; box-sizing: border-box; } }
   @media (prefers-color-scheme: dark) {
-    :global(body) { background: #0a0a0a; color: #ededed; }
-    header { background: rgb(10 10 10 / 0.8); }
-    nav a:hover, nav a.on, .logo { color: #ededed; }
     .card { border-color: #262626; }
     aside a { background: #444; } aside a.on { background: #ededed; }
   }
