@@ -35,25 +35,40 @@ export interface TickSoundOptions {
 
 /**
  * One audio context for every tickSound handler. Starting it costs Chrome ~100 ms of main thread, so a tick never
- * starts it (that would stall the start of a spin): it starts once ticks have been quiet for a second (a coast ends
- * with slow, sparse ticks), and only after the page has had a gesture (before that it could not play anyway; a mouse
- * wheel is not one). Until then, ticks are silent.
+ * starts it (that would stall the start of a spin). It starts on the page's first gesture (a click, a touch or a key,
+ * which is also what browsers need before they allow any sound), or once ticks have been quiet for a second. Before
+ * that, ticks are silent.
  */
 let audio: [AudioContext, AudioBuffer] | undefined
 let timer: ReturnType<typeof setTimeout> | undefined
+let watching = false
+
+function create() {
+  if (audio || navigator.userActivation?.hasBeenActive === false) return
+  const ctx = new AudioContext()
+  const len = Math.ceil(ctx.sampleRate * 0.006)
+  const click = ctx.createBuffer(1, len, ctx.sampleRate)
+  const d = click.getChannelData(0)
+  // Decaying noise with a fast attack: reads as a detent, not a beep.
+  for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len / 6))
+  audio = [ctx, click]
+}
 
 function soon() {
   clearTimeout(timer)
-  timer = setTimeout(() => {
-    if (audio || navigator.userActivation?.hasBeenActive === false) return
-    const ctx = new AudioContext()
-    const len = Math.ceil(ctx.sampleRate * 0.006)
-    const click = ctx.createBuffer(1, len, ctx.sampleRate)
-    const d = click.getChannelData(0)
-    // Decaying noise with a fast attack: reads as a detent, not a beep.
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len / 6))
-    audio = [ctx, click]
-  }, 1000)
+  timer = setTimeout(create, 1000)
+}
+
+/** Start the context as soon as the page has had its first gesture, so the first spin after it already clicks. */
+function onFirstGesture() {
+  if (watching || typeof window === 'undefined') return
+  watching = true
+  const start = () => {
+    for (const type of ['pointerdown', 'keydown', 'touchstart']) window.removeEventListener(type, start, true)
+    setTimeout(create, 0)
+  }
+  for (const type of ['pointerdown', 'keydown', 'touchstart'])
+    window.addEventListener(type, start, { capture: true, passive: true })
 }
 
 /** A soft mechanical click from a few ms of filtered noise, louder the faster the wheel spins. */
@@ -64,7 +79,10 @@ export function tickSound({
   dynamicTimbre = false,
 }: TickSoundOptions = {}): TickHandler {
   let last = -Infinity
-  if (typeof AudioContext !== 'undefined') soon()
+  if (typeof AudioContext !== 'undefined') {
+    soon()
+    onFirstGesture()
+  }
   return (_, velocity) => {
     if (typeof AudioContext === 'undefined') return
     if (!audio) return soon()
