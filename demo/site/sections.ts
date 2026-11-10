@@ -1,5 +1,5 @@
 /** The structure and copy of detent.hayder.sh/examples. `file` is the example in ../examples. */
-export interface Example { id: string; title: string; description: string; file: string }
+export interface Example { id: string; title: string; description: string; file: string; bare?: boolean }
 export interface Section { id: string; title: string; description: string; examples: Example[] }
 
 const ex = (title: string, description: string, file: string): Example => ({ id: title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''), title, description, file })
@@ -63,5 +63,12 @@ export const sections: Section[] = [
       ex('Dust', 'Words made of particles. Swipe sideways: each one comes apart and flies into the next, and a fast throw scatters them wider.', 'Dust'),
       ex('Riso', 'Photos printed in two inks as a halftone. Turn it: each print dissolves into the next, dot by dot, and speed pulls the plates out of register.', 'Riso'),
     ],
+  },
+  {
+    id: 'tuner',
+    title: 'Under the hood',
+    description:
+      'A throw coasts with exponential decay, lands on the row its projection points to, and settles on a spring. Throw it and watch x(t), v(t) and the live numbers; tune the physics, copy the config, and compare mouse wheel handling.',
+    examples: [{ id: 'physics-tuner', title: 'Physics tuner', description: '', file: 'Tuner', bare: true }],
   },
 ]

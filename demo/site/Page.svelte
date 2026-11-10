@@ -49,10 +49,12 @@
       <h2>{s.title}</h2>
       <p class="lead">{s.description}</p>
       {#each s.examples as e (e.id)}
-        <article id={e.id}>
-          <h3>{e.title}</h3>
-          <p class="lead">{e.description}</p>
-          <div class="card" use:near={(visible) => (seen[e.id] = visible)}>
+        <article id={e.id} class:bare={e.bare}>
+          {#if !e.bare}
+            <h3>{e.title}</h3>
+            <p class="lead">{e.description}</p>
+          {/if}
+          <div class="card" class:bare={e.bare} use:near={(visible) => (seen[e.id] = visible)}>
             {#if seen[e.id]}
               {#await load(e.file) then Example}<Example />{:catch err}<p class="err">{String(err)}</p>{/await}
             {/if}
@@ -71,6 +73,8 @@
   section { margin-top: 96px; }
   article { margin-top: 56px; scroll-margin-top: 80px; }
   section > h2 + .lead { margin-bottom: 40px; }
+  article.bare { margin-top: 0; }
+  .card.bare { border: 0; padding: 0; min-height: 420px; place-items: start stretch; overflow: visible; margin-top: 0; }
   .card { margin-top: 20px; border: 1px solid #e8e8e8; border-radius: 16px; min-height: 240px; padding: 24px; display: grid; place-items: center; overflow: hidden; box-sizing: border-box; }
   /* the canvas scenes are wider than the text column */
   .wide .card { margin-inline: -52px; }
