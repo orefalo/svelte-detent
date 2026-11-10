@@ -113,7 +113,7 @@
           <span class="swap-k">You receive</span>
           <span class="swap-row" aria-live="polite">
             <DetentText class="swap-amount" text={amount} />
-            <button bind:this={chip} type="button" class="swap-chip-btn" aria-expanded={open} aria-label="{receiving.symbol}: change the token you receive" onclick={() => (open = true)}>
+            <button bind:this={chip} type="button" class="swap-chip-btn" aria-expanded={open} aria-label="{receiving.symbol}: change the token you receive" onclick={(e) => (e.stopPropagation(), (open = true))}>
               {@render logo(receiving)}
               <svg class="swap-caret" viewBox="0 0 12 12" width="10" height="10" aria-hidden="true"><path d="M3 4.5l3 3 3-3" /></svg>
             </button>
