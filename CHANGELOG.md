@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1
+
+- Fix: the tick-sound audio context now starts on the page's first gesture, so the first spin already clicks.
+- Demo: docs page, "Under the hood" physics tuner, fixes to the Token list.
+
 ## 0.1.0
 
 - First release of `svelte-detent`: a Svelte 5 port of `@hayderkg/detent` with `<Detent>`, `<DetentText>`, `<DetentNumber>`, the headless `createDetent`, and feedback helpers (`ticks`, `haptics`, `tickSound`).
