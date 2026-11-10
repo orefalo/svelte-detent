@@ -36,12 +36,20 @@ export function velocityTracker(window = 100, stale = 40, size = 16): VelocityTr
       while (i > 0 && (now - ts[i - 1]! <= window || i > n - 2)) i--
       // One-pass weighted least squares. Times are taken relative to `now` (|t| ≤ ~150ms), so the
       // Σt² − (Σt)² form has no cancellation problem.
-      let sw = 0, st = 0, sx = 0, stt = 0, stx = 0
+      let sw = 0,
+        st = 0,
+        sx = 0,
+        stt = 0,
+        stx = 0
       for (let j = i; j < n; j++) {
         const t = ts[j]! - now
         const x = xs[j]! - xs[n - 1]! // centered too: positions can be ~1e6px
         const w = (1 - Math.min(1, -t / (window * 1.5))) ** 2 + 1e-6
-        sw += w; st += w * t; sx += w * x; stt += w * t * t; stx += w * t * x
+        sw += w
+        st += w * t
+        sx += w * x
+        stt += w * t * t
+        stx += w * t * x
       }
       const den = sw * stt - st * st
       return den > 1e-9 ? (sw * stx - st * sx) / den : 0

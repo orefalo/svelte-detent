@@ -129,7 +129,6 @@ describe('ticks options', () => {
   })
 })
 
-
 it('dynamic timbre follows absolute velocity while the default timbre stays fixed', async () => {
   vi.resetModules()
   const { tickSound } = await import('../src/lib/core/feedback')

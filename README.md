@@ -148,19 +148,19 @@ Animates short interface labels (a button's state, a counter, a status) with the
 - **No list of values.** Pass the current string or number. Changes are matched grapheme by grapheme.
 - **Interruptible.** A new label mid-roll continues from where each letter is, with no jump.
 
-| Prop | Default | Purpose |
-| --- | --- | --- |
-| `text` | required | Current string or number |
-| `morph` | `true` | Keep matching graphemes; `false` rolls the whole label |
-| `reveal` | `false` | New letters grow in from zero width |
-| `animate` | `true` | `false` for immediate updates |
-| `spring` | `{ stiffness: 420, damping: 32, mass: 1 }` | Partial spring configuration |
-| `snapDuration` | `550` | Maximum spring duration, in ms |
-| `rollDirection` | `'up'` | `'up'` or `'down'` |
-| `locale` | browser default | Grapheme segmentation locale |
-| `as` | `'span'` | Element: `span`, `strong`, `output`, `code`, a heading… |
-| `ref` | | Bindable root element |
-| `onAnimationStart` / `onAnimationComplete` / `onAnimationCancel` | | Transition callbacks |
+| Prop                                                             | Default                                    | Purpose                                                 |
+| ---------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------- |
+| `text`                                                           | required                                   | Current string or number                                |
+| `morph`                                                          | `true`                                     | Keep matching graphemes; `false` rolls the whole label  |
+| `reveal`                                                         | `false`                                    | New letters grow in from zero width                     |
+| `animate`                                                        | `true`                                     | `false` for immediate updates                           |
+| `spring`                                                         | `{ stiffness: 420, damping: 32, mass: 1 }` | Partial spring configuration                            |
+| `snapDuration`                                                   | `550`                                      | Maximum spring duration, in ms                          |
+| `rollDirection`                                                  | `'up'`                                     | `'up'` or `'down'`                                      |
+| `locale`                                                         | browser default                            | Grapheme segmentation locale                            |
+| `as`                                                             | `'span'`                                   | Element: `span`, `strong`, `output`, `code`, a heading… |
+| `ref`                                                            |                                            | Bindable root element                                   |
+| `onAnimationStart` / `onAnimationComplete` / `onAnimationCancel` |                                            | Transition callbacks                                    |
 
 `class`, `style` (a string or an object) and any HTML or ARIA attribute are passed to the element. `position: static` becomes `relative` and `display: inline` becomes `inline-block`, because the rolling layer needs a box of its own. Targets short, single-line LTR text; other text updates natively without rolling. Reduced motion is always respected.
 
@@ -176,13 +176,13 @@ A formatted number whose digits roll on the same spring, through the values betw
 <DetentNumber value={amount} locales="es-ES" format={{ style: 'currency', currency: 'EUR' }} />
 ```
 
-| Prop | Default | Purpose |
-| --- | --- | --- |
-| `value` | required | A `number` or `bigint` |
-| `locales` / `format` | | Passed straight to `Intl.NumberFormat` |
-| `trend` | `'auto'` | `'auto'` rolls up when the value grows and down when it shrinks; `'up'` or `'down'` always |
-| `classNames` | | A class per part: `integer`, `fraction`, `decimal`, `group`, `currency`, `sign`, `unit` |
-| `animate`, `spring`, `snapDuration`, `as`, `ref`, callbacks | | As in `DetentText` (`spring` default is `{ stiffness: 460, damping: 38, mass: 1 }`) |
+| Prop                                                        | Default  | Purpose                                                                                    |
+| ----------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------------ |
+| `value`                                                     | required | A `number` or `bigint`                                                                     |
+| `locales` / `format`                                        |          | Passed straight to `Intl.NumberFormat`                                                     |
+| `trend`                                                     | `'auto'` | `'auto'` rolls up when the value grows and down when it shrinks; `'up'` or `'down'` always |
+| `classNames`                                                |          | A class per part: `integer`, `fraction`, `decimal`, `group`, `currency`, `sign`, `unit`    |
+| `animate`, `spring`, `snapDuration`, `as`, `ref`, callbacks |          | As in `DetentText` (`spring` default is `{ stiffness: 460, damping: 38, mass: 1 }`)        |
 
 To style the parts (a quieter currency, smaller decimals), pass `classNames` and keep the parts on the baseline: each digit rolls through a window the height of the line, so a part raised with `vertical-align` would be cut off while it moves.
 

@@ -116,7 +116,9 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
   const bounds = (): Bounds => ({ min: lo(), max: hi(), loop: !!o.loop, count: o.count, enabled: o.isEnabled })
   const center = () => Math.round(raw / size())
   const display = () =>
-    o.loop ? raw : rubberClamp(raw, lo() * size(), Math.max(lo(), hi()) * size(), size() * o.visibleCount, 0.55 * p.rubberBand)
+    o.loop
+      ? raw
+      : rubberClamp(raw, lo() * size(), Math.max(lo(), hi()) * size(), size() * o.visibleCount, 0.55 * p.rubberBand)
   const physics = () => ({ ...p, restDelta: 0.5 / dpr() })
 
   function setMode(m: Mode) {
@@ -330,7 +332,7 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
     for (const r of el?.querySelectorAll<HTMLElement>('[data-detent-index]') ?? []) {
       const b = r.getBoundingClientRect()
       const d = horizontal() ? Math.abs(x - b.left - b.width / 2) : Math.abs(y - b.top - b.height / 2)
-      if (d < dist) (dist = d), (best = +r.dataset.detentIndex!)
+      if (d < dist) ((dist = d), (best = +r.dataset.detentIndex!))
     }
     return best
   }
@@ -535,7 +537,12 @@ export function createEngine(initialIndex: number, options: EngineOptions): Engi
         startRaw *= k
         tracker.reset()
         const m = motion
-        if (m) motion = { to: m.to * k, duration: m.duration, at: (t) => ((s) => ({ ...s, x: s.x * k, v: s.v * k }))(m.at(t)) }
+        if (m)
+          motion = {
+            to: m.to * k,
+            duration: m.duration,
+            at: (t) => ((s) => ({ ...s, x: s.x * k, v: s.v * k }))(m.at(t)),
+          }
         render()
       }
     },

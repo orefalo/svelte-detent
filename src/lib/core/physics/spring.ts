@@ -10,8 +10,7 @@ export const REST_SPEED = 0.01
 const STEP = 4 // ms, settle-time search resolution
 const MAX_T = 10_000
 
-export const dampingRatio = ({ stiffness: k, damping: c, mass: m }: SpringConfig): number =>
-  c / (2 * Math.sqrt(k * m))
+export const dampingRatio = ({ stiffness: k, damping: c, mass: m }: SpringConfig): number => c / (2 * Math.sqrt(k * m))
 
 /** Damping that gives damping ratio ζ for this stiffness and mass. */
 export const dampingFor = (zeta: number, stiffness: number, mass: number): number =>

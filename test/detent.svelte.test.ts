@@ -16,12 +16,20 @@ function show<P extends Record<string, unknown>>(component: Component<any>, prop
   flushSync()
   return { host, app }
 }
-const key = (el: Element, k: string) => el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
+const key = (el: Element, k: string) =>
+  el.dispatchEvent(new KeyboardEvent('keydown', { key: k, bubbles: true, cancelable: true }))
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
 
 beforeEach(() => {
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }))
-  vi.stubGlobal('ResizeObserver', class { observe() {} unobserve() {} disconnect() {} })
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    },
+  )
 })
 afterEach(() => {
   for (const app of mounted.splice(0)) unmount(app)
@@ -51,7 +59,10 @@ describe('createDetent (headless)', () => {
   it('arrow keys move the wheel, set the selection when it settles, and write the transform by hand', async () => {
     const changes: string[] = []
     const out: { api?: DetentApi<string> } = {}
-    const { host } = show(Probe, { options: () => ({ items: letters, label: 'L', onChange: (v: string) => changes.push(v), animate: false }), out })
+    const { host } = show(Probe, {
+      options: () => ({ items: letters, label: 'L', onChange: (v: string) => changes.push(v), animate: false }),
+      out,
+    })
     const lb = host.querySelector<HTMLElement>('[role=listbox]')!
     key(lb, 'ArrowDown')
     await wait(900)
@@ -60,14 +71,17 @@ describe('createDetent (headless)', () => {
     expect(changes).toEqual(['B'])
     expect(host.querySelector('[aria-selected=true]')!.textContent).toBe('B')
     const track = host.querySelector<HTMLElement>('[role=presentation]')!
-    expect(track.style.transform).toBe(`translate3d(0,${(5 - 1) / 2 * 36 - 36}px,0)`)
+    expect(track.style.transform).toBe(`translate3d(0,${((5 - 1) / 2) * 36 - 36}px,0)`)
     expect(lb.dataset.state).toBe('idle')
   })
 
   it('a controlled value turns the wheel; a disabled item is skipped', async () => {
     let value = $state('A')
     const out: { api?: DetentApi<string> } = {}
-    show(Probe, { options: () => ({ items: letters, label: 'L', value, isDisabled: (v: string) => v === 'D', animate: false }), out })
+    show(Probe, {
+      options: () => ({ items: letters, label: 'L', value, isDisabled: (v: string) => v === 'D', animate: false }),
+      out,
+    })
     value = 'F'
     flushSync()
     await wait(900)
@@ -114,7 +128,12 @@ describe('<Detent>', () => {
 
   it('bind:value follows the wheel and onChange fires', async () => {
     const seen: string[] = []
-    const { host } = show(Controlled, { items: letters, initial: 'A', animate: false, onChange: (v: string) => seen.push(v) })
+    const { host } = show(Controlled, {
+      items: letters,
+      initial: 'A',
+      animate: false,
+      onChange: (v: string) => seen.push(v),
+    })
     key(host.querySelector('[role=listbox]')!, 'End')
     await wait(900)
     flushSync()
@@ -127,7 +146,12 @@ describe('<Detent>', () => {
     expect(a.host.querySelector<HTMLInputElement>('input[type=hidden][name=letter]')!.value).toBe('B')
     const b = document.createElement('form')
     document.body.append(b)
-    mounted.push(mount(Detent, { target: b, props: { items: letters, label: 'L', name: 'letter', defaultValue: 'B', disabled: true } }))
+    mounted.push(
+      mount(Detent, {
+        target: b,
+        props: { items: letters, label: 'L', name: 'letter', defaultValue: 'B', disabled: true },
+      }),
+    )
     flushSync()
     expect(new FormData(b).has('letter')).toBe(false)
   })
@@ -135,7 +159,12 @@ describe('<Detent>', () => {
   it('form reset turns the wheel back to defaultValue', async () => {
     const form = document.createElement('form')
     document.body.append(form)
-    mounted.push(mount(Detent, { target: form, props: { items: letters, label: 'L', name: 'letter', defaultValue: 'B', animate: false } }))
+    mounted.push(
+      mount(Detent, {
+        target: form,
+        props: { items: letters, label: 'L', name: 'letter', defaultValue: 'B', animate: false },
+      }),
+    )
     flushSync()
     key(form.querySelector('[role=listbox]')!, 'End')
     await wait(900)
@@ -159,7 +188,9 @@ describe('<Detent>', () => {
     key(host.querySelector('[role=listbox]')!, 'ArrowDown')
     await wait(900)
     flushSync()
-    expect(host.querySelector<HTMLElement>('[data-detent-item="2"]')!.style.getPropertyValue('--detent-row-lag')).toBe('3')
+    expect(host.querySelector<HTMLElement>('[data-detent-item="2"]')!.style.getPropertyValue('--detent-row-lag')).toBe(
+      '3',
+    )
   })
 
   it('renders header, footer and the empty state', () => {
@@ -179,7 +210,12 @@ describe('<DetentText> and <DetentNumber>', () => {
     expect(host.querySelector('[data-detent-text-content]')!.textContent).toBe('World')
   })
   it('formats numbers, in parts when classNames is given', () => {
-    const { host } = show(DetentNumber, { value: 1234.5, locales: 'en-US', format: { style: 'currency', currency: 'USD' }, classNames: { currency: 'cur', fraction: 'fr' } })
+    const { host } = show(DetentNumber, {
+      value: 1234.5,
+      locales: 'en-US',
+      format: { style: 'currency', currency: 'USD' },
+      classNames: { currency: 'cur', fraction: 'fr' },
+    })
     const content = host.querySelector('[data-detent-number-content]')!
     expect(content.textContent).toBe('$1,234.50')
     expect(content.querySelector('.cur')!.textContent).toBe('$')

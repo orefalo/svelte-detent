@@ -57,7 +57,12 @@ function soon() {
 }
 
 /** A soft mechanical click from a few ms of filtered noise, louder the faster the wheel spins. */
-export function tickSound({ volume = 0.5, fullAt = 2, interval = 22, dynamicTimbre = false }: TickSoundOptions = {}): TickHandler {
+export function tickSound({
+  volume = 0.5,
+  fullAt = 2,
+  interval = 22,
+  dynamicTimbre = false,
+}: TickSoundOptions = {}): TickHandler {
   let last = -Infinity
   if (typeof AudioContext !== 'undefined') soon()
   return (_, velocity) => {
@@ -74,7 +79,12 @@ export function tickSound({ volume = 0.5, fullAt = 2, interval = 22, dynamicTimb
     src.buffer = click
     filter.type = 'bandpass'
     const speed = Number.isFinite(velocity) ? Math.min(1, Math.abs(velocity) / Math.max(0.01, fullAt)) : 0
-    const amount = dynamicTimbre === true ? 1 : typeof dynamicTimbre === 'number' && Number.isFinite(dynamicTimbre) ? Math.max(0, Math.min(1, dynamicTimbre)) : 0
+    const amount =
+      dynamicTimbre === true
+        ? 1
+        : typeof dynamicTimbre === 'number' && Number.isFinite(dynamicTimbre)
+          ? Math.max(0, Math.min(1, dynamicTimbre))
+          : 0
     filter.frequency.value = 2400 + amount * (speed * 1600 - 400)
     filter.Q.value = 1.2 - amount * speed * 0.5
     gain.gain.value = volume * (0.25 + 0.75 * Math.min(1, Math.abs(velocity) / fullAt))

@@ -17,10 +17,26 @@ export function refractionMap(vertical: boolean, inverse = false) {
 /** Safari, and every browser on iOS (all WebKit). */
 const webkit = () => typeof navigator !== 'undefined' && /Apple/.test(navigator.vendor)
 
-interface Config { id: string; amount: number; rgb: number; inverse: boolean; vertical: boolean; item: number; extent: number; band: () => number }
+interface Config {
+  id: string
+  amount: number
+  rgb: number
+  inverse: boolean
+  vertical: boolean
+  item: number
+  extent: number
+  band: () => number
+}
 type El<E> = () => E | null | undefined
 
-export function useRefraction<T>(d: DetentApi<T>, root: El<HTMLElement>, image: El<SVGFEImageElement>, displacement: El<SVGFEDisplacementMapElement>, config: () => Config, chroma: El<SVGFEOffsetElement>[] = []) {
+export function useRefraction<T>(
+  d: DetentApi<T>,
+  root: El<HTMLElement>,
+  image: El<SVGFEImageElement>,
+  displacement: El<SVGFEDisplacementMapElement>,
+  config: () => Config,
+  chroma: El<SVGFEOffsetElement>[] = [],
+) {
   const on = $derived(!!config().amount)
   const vertical = $derived(config().vertical)
   let update = () => {}
@@ -73,17 +89,29 @@ export function useRefraction<T>(d: DetentApi<T>, root: El<HTMLElement>, image: 
       })
     }
     update = apply
-    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver((entries) => {
-      const box = entries.find((e) => e.target === host)?.contentRect
-      if (box) { width = box.width || width; height = box.height || height }
-      apply()
-    })
+    const ro =
+      typeof ResizeObserver === 'undefined'
+        ? null
+        : new ResizeObserver((entries) => {
+            const box = entries.find((e) => e.target === host)?.contentRect
+            if (box) {
+              width = box.width || width
+              height = box.height || height
+            }
+            apply()
+          })
     ro?.observe(host)
     const band = host.querySelector('[data-detent-band]')
     if (band) ro?.observe(band)
     const off = d.subscribe(apply)
     mq.addEventListener('change', apply)
     untrack(apply)
-    return () => { off(); ro?.disconnect(); mq.removeEventListener('change', apply); update = () => {}; host.style.removeProperty('--detent-refraction-filter') }
+    return () => {
+      off()
+      ro?.disconnect()
+      mq.removeEventListener('change', apply)
+      update = () => {}
+      host.style.removeProperty('--detent-refraction-filter')
+    }
   })
 }

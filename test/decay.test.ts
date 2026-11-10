@@ -10,8 +10,12 @@ describe('decay', () => {
     const m = coast(0, 2, tau(0.998), Infinity)
     expect(m.at(100).v).toBeCloseTo(2 * 0.998 ** 100, 10)
     // Sum of per-ms steps ≈ integral.
-    let x = 0, v = 2
-    for (let i = 0; i < 1000; i++) { v *= 0.998; x += v }
+    let x = 0,
+      v = 2
+    for (let i = 0; i < 1000; i++) {
+      v *= 0.998
+      x += v
+    }
     expect(m.at(1000).x).toBeCloseTo(x, -1)
   })
 

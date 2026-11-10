@@ -8,8 +8,18 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEngine, type WheelMode } from '../src/lib/core'
 
-interface Sample { t: number; dx: number; dy: number; mode: number; wdx: number | null; wdy: number | null }
-interface Take { label: string; samples: Sample[] }
+interface Sample {
+  t: number
+  dx: number
+  dy: number
+  mode: number
+  wdx: number | null
+  wdy: number | null
+}
+interface Take {
+  label: string
+  samples: Sample[]
+}
 const dir = join(process.cwd(), 'test/fixtures/wheel')
 const load = (f: string) => JSON.parse(readFileSync(join(dir, f), 'utf8')) as Take[]
 const mouse = load('mx-master-2s-macos.json')
@@ -26,7 +36,10 @@ function replay(t: Take, wheelMode: WheelMode = 'auto') {
   const rests: number[] = []
   // No onMode on purpose: the engine must track its mode without a listener (it used not to).
   const engine = createEngine(START, {
-    count: 2000, itemSize: SIZE, visibleCount: 7, wheelMode,
+    count: 2000,
+    itemSize: SIZE,
+    visibleCount: 7,
+    wheelMode,
     onRender: (x) => frames.push({ x, t: performance.now() }),
     onSettle: (i) => rests.push(i),
   })
@@ -35,7 +48,13 @@ function replay(t: Take, wheelMode: WheelMode = 'auto') {
   for (const s of t.samples) {
     vi.advanceTimersByTime(Math.max(0, s.t - now))
     now = s.t
-    const e = new WheelEvent('wheel', { deltaX: s.dx, deltaY: s.dy, deltaMode: s.mode, bubbles: true, cancelable: true })
+    const e = new WheelEvent('wheel', {
+      deltaX: s.dx,
+      deltaY: s.dy,
+      deltaMode: s.mode,
+      bubbles: true,
+      cancelable: true,
+    })
     Object.defineProperty(e, 'timeStamp', { value: performance.now() })
     Object.defineProperty(e, 'wheelDeltaY', { value: s.wdy ?? undefined })
     Object.defineProperty(e, 'wheelDeltaX', { value: s.wdx ?? undefined })
@@ -51,7 +70,11 @@ function replay(t: Take, wheelMode: WheelMode = 'auto') {
 }
 
 describe('wheel replay (real recordings)', () => {
-  beforeEach(() => vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'] }))
+  beforeEach(() =>
+    vi.useFakeTimers({
+      toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'],
+    }),
+  )
   afterEach(() => vi.useRealTimers())
 
   it('mouse slow clicks: one row per click (9 down, 9 up = back to the start)', () => {
@@ -97,7 +120,11 @@ describe('wheel replay (real recordings)', () => {
  * keeps resetting and the wheel crawls until the events slow down. These check the motion DURING the burst.
  */
 describe('wheel bursts faster than frames', () => {
-  beforeEach(() => vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'] }))
+  beforeEach(() =>
+    vi.useFakeTimers({
+      toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'],
+    }),
+  )
   afterEach(() => vi.useRealTimers())
 
   /** `deltaY` every `gap` ms for `ms`, starting `phase` ms into a frame; the position (rows) every 50 ms. */
@@ -119,7 +146,8 @@ describe('wheel bursts faster than frames', () => {
       modes.add(engine.mode)
       const before = Math.floor((performance.now() - t0) / 50)
       vi.advanceTimersByTime(gap)
-      for (let k = before + 1; k <= Math.floor((performance.now() - t0) / 50); k++) samples.push(engine.x / SIZE - START)
+      for (let k = before + 1; k <= Math.floor((performance.now() - t0) / 50); k++)
+        samples.push(engine.x / SIZE - START)
     }
     const atEnd = engine.x / SIZE - START
     let tail = 0
@@ -138,7 +166,8 @@ describe('wheel bursts faster than frames', () => {
         const r = burst('auto', gap, phase)
         // Moving within the first 100 ms, and then every 50 ms of the burst (max speed is ~10 rows per 50 ms).
         expect(r.samples[1]!, 'rows after 100ms').toBeGreaterThan(8)
-        for (let i = 3; i < r.samples.length; i++) expect(r.samples[i]! - r.samples[i - 1]!, `rows in window ${i}`).toBeGreaterThan(5)
+        for (let i = 3; i < r.samples.length; i++)
+          expect(r.samples[i]! - r.samples[i - 1]!, `rows in window ${i}`).toBeGreaterThan(5)
         // And it settles on a row soon after the events stop.
         expect(r.tail).toBeLessThan(1400)
         expect(r.final).toBe(Math.round(r.final))
@@ -150,7 +179,8 @@ describe('wheel bursts faster than frames', () => {
         expect(r.final).toBe(r.events) // one row per event, however large its delta
         // The wheel follows the steps while they come: never more than a few frames behind.
         const rate = 50 / gap // rows per 50 ms
-        for (let i = 2; i < r.samples.length; i++) expect(r.samples[i]! - r.samples[i - 1]!, `rows in window ${i}`).toBeGreaterThan(rate * 0.5)
+        for (let i = 2; i < r.samples.length; i++)
+          expect(r.samples[i]! - r.samples[i - 1]!, `rows in window ${i}`).toBeGreaterThan(rate * 0.5)
         expect(r.tail).toBeLessThan(600)
       })
     }
@@ -162,7 +192,11 @@ describe('wheel bursts faster than frames', () => {
 })
 
 describe('wheel recordings: motion during the gesture', () => {
-  beforeEach(() => vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'] }))
+  beforeEach(() =>
+    vi.useFakeTimers({
+      toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'],
+    }),
+  )
   afterEach(() => vi.useRealTimers())
 
   /** Replays a take and records the position (rows from the start) 500 ms in, and how long it takes to rest after. */
@@ -178,7 +212,13 @@ describe('wheel recordings: motion during the gesture', () => {
       vi.advanceTimersByTime(Math.max(0, s.t - now))
       now = s.t
       if (s.t - t0 >= 500 && at500 !== at500) at500 = engine.x / SIZE - START
-      const e = new WheelEvent('wheel', { deltaX: s.dx, deltaY: s.dy, deltaMode: s.mode, bubbles: true, cancelable: true })
+      const e = new WheelEvent('wheel', {
+        deltaX: s.dx,
+        deltaY: s.dy,
+        deltaMode: s.mode,
+        bubbles: true,
+        cancelable: true,
+      })
       Object.defineProperty(e, 'timeStamp', { value: performance.now() })
       Object.defineProperty(e, 'wheelDeltaY', { value: s.wdy ?? undefined })
       Object.defineProperty(e, 'wheelDeltaX', { value: s.wdx ?? undefined })

@@ -5,10 +5,7 @@
     "import": "{ useDetent }",
     "gzip": true,
     "limit": "7.4 kB",
-    "ignore": [
-      "react",
-      "react-dom"
-    ]
+    "ignore": ["react", "react-dom"]
   },
   {
     "name": "<Detent> (styled component, includes core)",
@@ -16,10 +13,7 @@
     "import": "{ Detent }",
     "gzip": true,
     "limit": "17.9 kB",
-    "ignore": [
-      "react",
-      "react-dom"
-    ]
+    "ignore": ["react", "react-dom"]
   },
   {
     "name": "engine only: createEngine (no React)",
@@ -40,10 +34,7 @@
     "import": "{ DetentText }",
     "gzip": true,
     "limit": "4.25 kB",
-    "ignore": [
-      "react",
-      "react-dom"
-    ]
+    "ignore": ["react", "react-dom"]
   },
   {
     "name": "detent/number (DetentNumber, independent entry)",
@@ -51,22 +42,13 @@
     "import": "{ DetentNumber }",
     "gzip": true,
     "limit": "4.7 kB",
-    "ignore": [
-      "react",
-      "react-dom"
-    ]
+    "ignore": ["react", "react-dom"]
   },
   {
     "name": "detent/text + detent/number together",
-    "path": [
-      "dist/text.js",
-      "dist/number.js"
-    ],
+    "path": ["dist/text.js", "dist/number.js"],
     "gzip": true,
     "limit": "7.45 kB",
-    "ignore": [
-      "react",
-      "react-dom"
-    ]
+    "ignore": ["react", "react-dom"]
   }
 ]

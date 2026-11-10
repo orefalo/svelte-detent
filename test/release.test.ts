@@ -29,8 +29,12 @@ describe('release', () => {
       const m = release(400 * H + 11, v, H, open, ios)
       const s = sample(m, 1000)
       for (let i = 1; i < s.length; i++) {
-        const a = s[i - 1]!, b = s[i]!
-        if (b.t >= m.duration) { expect(Math.abs(b.x - a.x)).toBeLessThan(0.5); continue } // the rest landing
+        const a = s[i - 1]!,
+          b = s[i]!
+        if (b.t >= m.duration) {
+          expect(Math.abs(b.x - a.x)).toBeLessThan(0.5)
+          continue
+        } // the rest landing
         expect(Math.abs(b.x - a.x)).toBeLessThan(Math.abs(a.v) * 1 + 0.05) // no jumps
         // Deceleration never exceeds the fastest allowed coast (τ' ≥ 0.6τ) plus a gentle spring.
         expect(Math.abs(b.v - a.v)).toBeLessThan(Math.abs(a.v) / (0.6 * tau(ios.decay)) + 0.01)
@@ -50,7 +54,8 @@ describe('release', () => {
   it('no magnetic pull: the settle spring never speeds the coast up by more than ~10%', () => {
     for (const v of [0.5, 1, 2, 4, 8]) {
       const m = release(500 * H + 5, v, H, open, ios)
-      let vh = 0, vmax = 0
+      let vh = 0,
+        vmax = 0
       for (let t = 0; t <= m.duration; t++) {
         const s = m.at(t)
         if (s.phase !== 'spring') continue
@@ -62,12 +67,13 @@ describe('release', () => {
   })
 
   it('the final approach is short: the last 6px take under 200ms (was ~300ms)', () => {
-    for (const v of [0, 0.3, 1, 2, 4, 8, -2]) for (const x0 of [7, 20, 30]) {
-      const m = release(500 * H + x0, v, H, open, { ...ios, restDelta: 0.25 })
-      let t6 = 0
-      for (let t = 0; t <= m.duration && !t6; t++) if (Math.abs(m.at(t).x - m.index * H) < 6) t6 = t
-      expect(m.duration - t6).toBeLessThan(200)
-    }
+    for (const v of [0, 0.3, 1, 2, 4, 8, -2])
+      for (const x0 of [7, 20, 30]) {
+        const m = release(500 * H + x0, v, H, open, { ...ios, restDelta: 0.25 })
+        let t6 = 0
+        for (let t = 0; t <= m.duration && !t6; t++) if (Math.abs(m.at(t).x - m.index * H) < 6) t6 = t
+        expect(m.duration - t6).toBeLessThan(200)
+      }
   })
 
   it('a still release springs to the nearest row', () => {
@@ -100,7 +106,8 @@ describe('release', () => {
     const m = release(40 * H, 6, H, bounds, ios)
     let switched = false
     for (let t = 0.05; t < m.duration; t += 0.05) {
-      const a = m.at(t - 0.05), b = m.at(t)
+      const a = m.at(t - 0.05),
+        b = m.at(t)
       if (a.phase !== b.phase) {
         switched = true
         expect(Math.abs(b.v - a.v)).toBeLessThan(0.01)

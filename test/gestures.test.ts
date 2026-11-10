@@ -8,8 +8,19 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createEngine } from '../src/lib/core'
 
-interface Sample { t: number; x: number; y: number; type: 'down' | 'move' | 'up' | 'cancel' }
-interface Gesture { source: 'device' | 'synthetic'; label: string; pointerType: string; device: { hz: number; dpr: number }; samples: Sample[] }
+interface Sample {
+  t: number
+  x: number
+  y: number
+  type: 'down' | 'move' | 'up' | 'cancel'
+}
+interface Gesture {
+  source: 'device' | 'synthetic'
+  label: string
+  pointerType: string
+  device: { hz: number; dpr: number }
+  samples: Sample[]
+}
 
 const dir = join(process.cwd(), 'test/fixtures/gestures') // happy-dom swaps URL, so use paths
 const gestures: (Gesture & { file: string })[] = readdirSync(dir)
@@ -19,7 +30,15 @@ const gestures: (Gesture & { file: string })[] = readdirSync(dir)
 const SIZE = 44
 
 function pointer(type: string, s: Sample, pointerType: string) {
-  const e = new PointerEvent(type, { bubbles: true, cancelable: true, pointerId: 1, pointerType, clientX: s.x, clientY: s.y, buttons: type === 'pointerup' ? 0 : 1 })
+  const e = new PointerEvent(type, {
+    bubbles: true,
+    cancelable: true,
+    pointerId: 1,
+    pointerType,
+    clientX: s.x,
+    clientY: s.y,
+    buttons: type === 'pointerup' ? 0 : 1,
+  })
   Object.defineProperty(e, 'timeStamp', { value: s.t })
   return e
 }
@@ -32,15 +51,22 @@ function replay(g: Gesture) {
   let releaseV = NaN
   const start = 50
   const engine = createEngine(start, {
-    count: 200, itemSize: SIZE, visibleCount: 5,
+    count: 200,
+    itemSize: SIZE,
+    visibleCount: 5,
     onRender: (x, v) => frames.push({ x, v, t: performance.now() }),
     onSettle: (i) => (settled = i),
-    onMode: (m) => { if ((m === 'coast' || m === 'spring') && Number.isNaN(releaseV)) releaseV = engine.v },
+    onMode: (m) => {
+      if ((m === 'coast' || m === 'spring') && Number.isNaN(releaseV)) releaseV = engine.v
+    },
   })
   const detach = engine.attach(el)
   for (const s of g.samples) {
     if (s.type === 'down') el.dispatchEvent(pointer('pointerdown', s, g.pointerType))
-    else window.dispatchEvent(pointer(s.type === 'move' ? 'pointermove' : s.type === 'up' ? 'pointerup' : 'pointercancel', s, g.pointerType))
+    else
+      window.dispatchEvent(
+        pointer(s.type === 'move' ? 'pointermove' : s.type === 'up' ? 'pointerup' : 'pointercancel', s, g.pointerType),
+      )
   }
   const releasedAt = frames.length
   for (let i = 0; i < 600 && settled === null; i++) vi.advanceTimersByTime(1000 / 120)
@@ -61,7 +87,9 @@ function tailVelocity(g: Gesture, ms: number) {
 
 describe('gesture replay', () => {
   beforeEach(() => {
-    vi.useFakeTimers({ toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'] })
+    vi.useFakeTimers({
+      toFake: ['requestAnimationFrame', 'cancelAnimationFrame', 'performance', 'setTimeout', 'clearTimeout'],
+    })
   })
   afterEach(() => vi.useRealTimers())
 
@@ -76,8 +104,11 @@ describe('gesture replay', () => {
         const last = r.frames.at(-1)!
         expect(last.x).toBe(r.settled! * SIZE)
         for (let i = r.releasedAt + 1; i < r.frames.length; i++) {
-          const a = r.frames[i - 1]!, b = r.frames[i]!
-          expect(Math.abs(b.x - a.x)).toBeLessThanOrEqual(Math.max(Math.abs(a.v), Math.abs(b.v)) * Math.max(b.t - a.t, 1) * 1.1 + 1)
+          const a = r.frames[i - 1]!,
+            b = r.frames[i]!
+          expect(Math.abs(b.x - a.x)).toBeLessThanOrEqual(
+            Math.max(Math.abs(a.v), Math.abs(b.v)) * Math.max(b.t - a.t, 1) * 1.1 + 1,
+          )
         }
       })
 

@@ -14,8 +14,13 @@ describe('server rendering', () => {
     expect(body).toContain('name="l"')
   })
   it('DetentText and DetentNumber render native text', () => {
-    expect(render(DetentText, { props: { text: '<Send & save>', as: 'strong' } }).body).toContain('&lt;Send &amp; save>')
-    expect(render(DetentNumber, { props: { value: 1234.5, locales: 'en-US', format: { style: 'currency', currency: 'USD' } } }).body).toContain('$1,234.50')
+    expect(render(DetentText, { props: { text: '<Send & save>', as: 'strong' } }).body).toContain(
+      '&lt;Send &amp; save>',
+    )
+    expect(
+      render(DetentNumber, {
+        props: { value: 1234.5, locales: 'en-US', format: { style: 'currency', currency: 'USD' } },
+      }).body,
+    ).toContain('$1,234.50')
   })
 })
-

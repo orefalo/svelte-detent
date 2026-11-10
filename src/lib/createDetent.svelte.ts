@@ -66,7 +66,8 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
       o.getKey ? o.getKey(item, i) : typeof item === 'string' || typeof item === 'number' ? item : i
 
   function derive(o: DetentOptions<T>): Layout<T> {
-    if (o.items !== memo.items || o.getKey !== memo.getKey) memo = { items: o.items, getKey: o.getKey, keys: o.items.map(keyFn(o)) }
+    if (o.items !== memo.items || o.getKey !== memo.getKey)
+      memo = { items: o.items, getKey: o.getKey, keys: o.items.map(keyFn(o)) }
     const n = o.items.length
     const size = Math.max(1, o.itemSize ?? 36) || 36
     const visible = Math.max(1, Math.round(o.visibleCount ?? 5)) || 5
@@ -90,7 +91,8 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
   /** The live layout (what is on screen), also unpacked into locals for the per-frame code. */
   let L = derive(init)
   let { o, keys, n, size, visible, vertical, loop, base, head, loadAt, footAt } = L
-  const live = (next: Layout<T>) => ({ o, keys, n, size, visible, vertical, loop, base, head, loadAt, footAt } = L = next)
+  const live = (next: Layout<T>) =>
+    ({ o, keys, n, size, visible, vertical, loop, base, head, loadAt, footAt } = L = next)
 
   const keyOf = (S: Layout<T>, v: T | undefined) => (v === undefined ? undefined : keyFn(S.o)(v, -1))
   const label = (S: Layout<T>, i: number) => (S.o.getLabel ? S.o.getLabel(S.o.items[i] as T, i) : String(S.o.items[i]))
@@ -132,7 +134,13 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
   const publish = (velocity: number) => {
     if (!subs.size) return
     // One frame object for every subscriber, not one each.
-    const frame: DetentFrame = { offset: engine.x / size, velocity, mode: engine.mode, target: engine.target, from: engine.from }
+    const frame: DetentFrame = {
+      offset: engine.x / size,
+      velocity,
+      mode: engine.mode,
+      target: engine.target,
+      from: engine.from,
+    }
     subs.forEach((fn) => fn(frame))
   }
 
@@ -181,7 +189,12 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
   function onMode(m: Mode) {
     if (root) root.dataset.state = m
     if (track) track.style.willChange = m === 'idle' ? '' : 'transform'
-    if (m !== 'idle' !== spinning) (spinning = !spinning) ? o.onSpinStart?.() : o.onSpinEnd?.()
+    const moving = m !== 'idle'
+    if (moving !== spinning) {
+      spinning = moving
+      if (moving) o.onSpinStart?.()
+      else o.onSpinEnd?.()
+    }
     publish(engine.v)
   }
 
@@ -239,7 +252,7 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
     if (o.dir !== dirProp) {
       dirProp = o.dir
       const r = dirProp ? dirProp === 'rtl' : root ? getComputedStyle(root).direction === 'rtl' : rtl
-      if (r !== rtl) (rtl = r), (redraw = true), update()
+      if (r !== rtl) ((rtl = r), (redraw = true), update())
     }
     engine.set(engineOptions()) // a new row size rescales positions: the same rows stay centered
     if (prev.keys !== keys) {
@@ -259,7 +272,8 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
       const lo = head ? -1 : 0
       const hi = footAt === footAt ? footAt : n - 1
       const at = engine.index
-      if (at < lo || at > hi || at === loadAt) engine.goTo(Math.max(lo, Math.min(hi, at === loadAt ? n - 1 : at)), false)
+      if (at < lo || at > hi || at === loadAt)
+        engine.goTo(Math.max(lo, Math.min(hi, at === loadAt ? n - 1 : at)), false)
     }
     // Controlled value. A new value turns the wheel to it. While the user turns it, the wheel follows the user
     // and reports through onChange; once it rests, it agrees with the parent: if the parent kept another value
@@ -268,7 +282,13 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
     if (vk !== valueKey && (valueKey = vk) !== undefined) {
       const i = keys.indexOf(vk as Key)
       if (i >= 0 && i !== emitted) engine.scrollTo((emitted = i), o.animate ?? true)
-    } else if (vk !== undefined && engine.mode === 'idle' && rest === engine.index && itemAt(L, rest) >= 0 && keys[itemAt(L, rest)] !== vk) {
+    } else if (
+      vk !== undefined &&
+      engine.mode === 'idle' &&
+      rest === engine.index &&
+      itemAt(L, rest) >= 0 &&
+      keys[itemAt(L, rest)] !== vk
+    ) {
       const i = keys.indexOf(vk as Key)
       if (i >= 0 && enabled(L, i)) engine.scrollTo((emitted = i), o.animate ?? true)
     }
@@ -356,7 +376,9 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
           item: o.items[index] as T,
           index,
           // Duplicate item keys must not become duplicate keyed-each keys (that is an error in Svelte).
-          key: ((k: Key) => (used.has(k) ? `${k}#${j}` : (used.add(k), k)))(S.loop ? `${S.keys[index]}:${Math.floor(j / n)}` : (S.keys[index] as Key)),
+          key: ((k: Key) => (used.has(k) ? `${k}#${j}` : (used.add(k), k)))(
+            S.loop ? `${S.keys[index]}:${Math.floor(j / n)}` : (S.keys[index] as Key),
+          ),
           disabled,
         }),
       )
@@ -413,21 +435,50 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
   })
 
   return {
-    get rootAttrs() { return view.rootAttrs },
-    get rootStyle() { return view.rootStyle },
-    get trackAttrs() { return view.trackAttrs },
-    get trackStyle() { return view.trackStyle },
+    get rootAttrs() {
+      return view.rootAttrs
+    },
+    get rootStyle() {
+      return view.rootStyle
+    },
+    get trackAttrs() {
+      return view.trackAttrs
+    },
+    get trackStyle() {
+      return view.trackStyle
+    },
     liveRegionAttrs: { role: 'status', 'aria-live': 'polite', 'aria-atomic': true },
-    liveRegionStyle: cssText({ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clipPath: 'inset(50%)', whiteSpace: 'nowrap' }),
-    get announcement() { return view.announcement },
+    liveRegionStyle: cssText({
+      position: 'absolute',
+      width: 1,
+      height: 1,
+      overflow: 'hidden',
+      clipPath: 'inset(50%)',
+      whiteSpace: 'nowrap',
+    }),
+    get announcement() {
+      return view.announcement
+    },
     attachRoot,
     attachTrack,
-    get rows() { return view.rows },
-    get header(): DetentSlot { return view.header },
-    get footer(): DetentSlot { return view.footer },
-    get loadingRow(): DetentSlot { return view.loadingRow },
-    get selectedIndex() { return view.selectedIndex },
-    get selectedItem() { return view.selectedItem },
+    get rows() {
+      return view.rows
+    },
+    get header(): DetentSlot {
+      return view.header
+    },
+    get footer(): DetentSlot {
+      return view.footer
+    },
+    get loadingRow(): DetentSlot {
+      return view.loadingRow
+    },
+    get selectedIndex() {
+      return view.selectedIndex
+    },
+    get selectedItem() {
+      return view.selectedItem
+    },
     scrollTo(i, opt) {
       jumping = true
       try {
@@ -440,7 +491,9 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
       subs.add(fn)
       return () => void subs.delete(fn)
     },
-    get rtl() { return view.rtl },
+    get rtl() {
+      return view.rtl
+    },
     engine,
   }
 }

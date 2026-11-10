@@ -35,7 +35,10 @@ describe('velocityTracker', () => {
   it('is robust to jittery sample timing', () => {
     const vt = velocityTracker()
     let t = 0
-    for (let i = 0; i < 20; i++) { t += 6 + (i % 3) * 3; vt.push(t, -0.9 * t) }
+    for (let i = 0; i < 20; i++) {
+      t += 6 + (i % 3) * 3
+      vt.push(t, -0.9 * t)
+    }
     expect(vt.get(t)).toBeCloseTo(-0.9, 9)
   })
 

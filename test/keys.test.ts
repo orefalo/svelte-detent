@@ -9,7 +9,11 @@ const SIZE = 40
 const repeatsIn = (from: number, to: number) => (to < from ? 0 : Math.floor((to - from) / REPEAT + 1e-9) + 1)
 
 function setup(options: Partial<EngineOptions>, reduced: boolean) {
-  vi.stubGlobal('matchMedia', (q: string) => ({ matches: reduced && q.includes('reduce'), addEventListener() {}, removeEventListener() {} }))
+  vi.stubGlobal('matchMedia', (q: string) => ({
+    matches: reduced && q.includes('reduce'),
+    addEventListener() {},
+    removeEventListener() {},
+  }))
   const el = document.createElement('div')
   el.tabIndex = 0
   document.body.append(el)
@@ -62,7 +66,11 @@ describe('keyAcceleration (reduced motion: every step lands at once)', () => {
     b.hold('ArrowDown', 6000)
     const rows = b.engine.index
     // 1 + (repeats before 2 s) + 1.5 × (2–4 s) + 2.5 × (4–6 s), give or take the carried fraction
-    const expected = 1 + repeats(500, 1999) + 1.5 * (repeats(500, 3999) - repeats(500, 1999)) + 2.5 * (repeats(500, 6000) - repeats(500, 3999))
+    const expected =
+      1 +
+      repeats(500, 1999) +
+      1.5 * (repeats(500, 3999) - repeats(500, 1999)) +
+      2.5 * (repeats(500, 6000) - repeats(500, 3999))
     expect(Math.abs(rows - expected)).toBeLessThan(2)
   })
 

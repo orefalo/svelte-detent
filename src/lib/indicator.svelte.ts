@@ -61,7 +61,8 @@ export interface IndicatorState<T> {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t
 const clamp = (x: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, x))
-const mix = (a: string, b: string, t: number) => (t <= 0 ? a : t >= 1 ? b : `color-mix(in oklab, ${a}, ${b} ${(t * 100).toFixed(1)}%)`)
+const mix = (a: string, b: string, t: number) =>
+  t <= 0 ? a : t >= 1 ? b : `color-mix(in oklab, ${a}, ${b} ${(t * 100).toFixed(1)}%)`
 
 interface Config<T> {
   opts: IndicatorOptions<T>
@@ -79,7 +80,12 @@ interface Config<T> {
  * Drives the indicator from engine frames: size (fit content) and color, written as CSS variables on
  * the root. No renders, no layout reads in the frame loop: content sizes come from ResizeObserver.
  */
-export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null, track: () => HTMLElement | null, cfg: () => Config<T>) {
+export function useIndicator<T>(
+  d: DetentApi<T>,
+  root: () => HTMLElement | null,
+  track: () => HTMLElement | null,
+  cfg: () => Config<T>,
+) {
   const sizes = new Map<Key, { w: number; h: number }>()
   // What was last written to the root: an unchanged variable is not written again (each write restyles the wheel).
   const written = new Map<string, string>()
@@ -161,7 +167,7 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
       const span = f.target - f.from
       const dirn = Math.sign(span) || 1
       const rem = (f.target - f.offset) * dirn // rows still to go (negative once past the target)
-      const catchWin = Math.abs(span) <= 1 ? Math.abs(span) : o.catchRows ?? 1.5
+      const catchWin = Math.abs(span) <= 1 ? Math.abs(span) : (o.catchRows ?? 1.5)
       if (isNaN(st.rem0) && rem <= catchWin) {
         // Entering the catch window: start from wherever the indicator is now.
         st.rem0 = Math.max(rem, 1e-6)
@@ -185,7 +191,7 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
       const j = Math.round(f.offset)
       const t = size(j)
       const dpr = typeof window === 'undefined' ? 1 : window.devicePixelRatio || 1
-      if (t) (w = Math.round(t.w * dpr) / dpr), (h = isNaN(t.h) ? h : Math.round(t.h * dpr) / dpr)
+      if (t) ((w = Math.round(t.w * dpr) / dpr), (h = isNaN(t.h) ? h : Math.round(t.h * dpr) / dpr))
       if (colorFn) color = colorAt(j)
       st.cp = f.offset
       st.held = w
@@ -204,7 +210,13 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
     put(el, '--indicator-velocity', String(Math.round(f.velocity * 1e3) / 1e3))
   }
 
-  const now = (): DetentFrame => ({ offset: d.engine.x / (cfg().pitch || 1), velocity: d.engine.v, mode: d.engine.mode, target: d.engine.target, from: d.engine.from })
+  const now = (): DetentFrame => ({
+    offset: d.engine.x / (cfg().pitch || 1),
+    velocity: d.engine.v,
+    mode: d.engine.mode,
+    target: d.engine.target,
+    from: d.engine.from,
+  })
 
   $effect(() => d.subscribe((f) => apply(f)))
   // Options can change while the wheel rests (no frames): bring the variables up to date after every change.
@@ -224,12 +236,22 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
     let peak = 0
     let moving = false
     const write = (v: number) => root()?.style.setProperty('--indicator-impact', String(v))
-    const stop = () => { cancelAnimationFrame(raf); raf = 0; write(0) }
-    const preference = () => { if (mq.matches) { stop(); peak = 0 } }
+    const stop = () => {
+      cancelAnimationFrame(raf)
+      raf = 0
+      write(0)
+    }
+    const preference = () => {
+      if (mq.matches) {
+        stop()
+        peak = 0
+      }
+    }
     mq.addEventListener('change', preference)
     const off = d.subscribe((f) => {
       const o = cfg().opts
-      const intensity = o.impact === true ? 0.5 : typeof o.impact === 'number' && Number.isFinite(o.impact) ? clamp(o.impact, 0, 1) : 0
+      const intensity =
+        o.impact === true ? 0.5 : typeof o.impact === 'number' && Number.isFinite(o.impact) ? clamp(o.impact, 0, 1) : 0
       if (f.mode !== 'idle') {
         if (raf) stop()
         moving = true
@@ -246,13 +268,21 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
       write(amplitude)
       const frame = (t: number) => {
         const elapsed = Math.max(0, t - start)
-        if (elapsed >= 280) { raf = 0; write(0); return }
+        if (elapsed >= 280) {
+          raf = 0
+          write(0)
+          return
+        }
         write(Number((amplitude * Math.exp(-elapsed / 65) * Math.cos(elapsed / 42)).toFixed(4)))
         raf = requestAnimationFrame(frame)
       }
       raf = requestAnimationFrame(frame)
     })
-    return () => { off(); mq.removeEventListener('change', preference); stop() }
+    return () => {
+      off()
+      mq.removeEventListener('change', preference)
+      stop()
+    }
   })
 
   // Sizes are cached by key: drop the ones whose items are gone, so a list that keeps changing (infinite
@@ -290,7 +320,9 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
     }))
     // Fonts change text metrics: measure again once they are in.
     document.fonts?.ready.then(() => {
-      track()?.querySelectorAll<HTMLElement>('[data-detent-content]').forEach((el) => measure(el, el.offsetWidth, el.offsetHeight))
+      track()
+        ?.querySelectorAll<HTMLElement>('[data-detent-content]')
+        .forEach((el) => measure(el, el.offsetWidth, el.offsetHeight))
       apply(now())
     })
     return () => {
@@ -304,8 +336,7 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
     const r = ro
     const t = track()
     if (!r || !t) return
-    for (const el of t.querySelectorAll('[data-detent-content]'))
-      if (!seen.has(el)) seen.add(el), r.observe(el)
+    for (const el of t.querySelectorAll('[data-detent-content]')) if (!seen.has(el)) (seen.add(el), r.observe(el))
   })
 
   return { state: s, apply: () => (written.clear(), apply(now())) }
@@ -316,13 +347,15 @@ export function indicatorStyle<T>(o: IndicatorOptions<T>, vertical: boolean): CS
   const shape = o.shape ?? 'rounded'
   const material = o.material ?? 'solid'
   // The fallback matters: until the first frame writes it, an undefined var() would void the whole background.
-  const accent = typeof o.color === 'function' ? 'var(--indicator-color, var(--detent-fg))' : o.color ?? 'var(--detent-fg)'
+  const accent =
+    typeof o.color === 'function' ? 'var(--indicator-color, var(--detent-fg))' : (o.color ?? 'var(--detent-fg)')
   const hair = 'var(--detent-line)'
   const box = (shape === 'rounded' || shape === 'pill') && material !== 'outline' && material !== 'gradient-border'
   const shadows: string[] = []
-  const st: CSSProperties = { borderRadius: shape === 'pill' ? 999 : shape === 'rounded' ? o.radius ?? 12 : 0 }
+  const st: CSSProperties = { borderRadius: shape === 'pill' ? 999 : shape === 'rounded' ? (o.radius ?? 12) : 0 }
 
-  if (shape === 'lines') shadows.push(vertical ? `inset 0 1px ${hair}, inset 0 -1px ${hair}` : `inset 1px 0 ${hair}, inset -1px 0 ${hair}`)
+  if (shape === 'lines')
+    shadows.push(vertical ? `inset 0 1px ${hair}, inset 0 -1px ${hair}` : `inset 1px 0 ${hair}, inset -1px 0 ${hair}`)
   else if (shape === 'underline') shadows.push(`inset 0 -2px ${accent}`)
   else if (shape === 'brackets') {
     const g = `linear-gradient(${accent},${accent})`
@@ -333,13 +366,21 @@ export function indicatorStyle<T>(o: IndicatorOptions<T>, vertical: boolean): CS
       backgroundPosition: 'left top,left top,right top,right top,left bottom,left bottom,right bottom,right bottom',
     })
   } else if (shape === 'dot')
-    Object.assign(st, { background: `radial-gradient(circle, ${accent} 3px, transparent 3.5px) no-repeat 2px 50% / 8px 8px` })
+    Object.assign(st, {
+      background: `radial-gradient(circle, ${accent} 3px, transparent 3.5px) no-repeat 2px 50% / 8px 8px`,
+    })
   else if (shape === 'needle')
-    Object.assign(st, { background: `linear-gradient(${accent},${accent}) no-repeat center / ${vertical ? '100% 2px' : '2px 100%'}` })
+    Object.assign(st, {
+      background: `linear-gradient(${accent},${accent}) no-repeat center / ${vertical ? '100% 2px' : '2px 100%'}`,
+    })
 
   if (shape === 'rounded' || shape === 'pill') {
     if (material === 'solid') {
-      st.background = o.background ?? (typeof o.color === 'function' ? 'color-mix(in oklab, var(--indicator-color, var(--detent-fg)) 14%, transparent)' : 'var(--detent-band)')
+      st.background =
+        o.background ??
+        (typeof o.color === 'function'
+          ? 'color-mix(in oklab, var(--indicator-color, var(--detent-fg)) 14%, transparent)'
+          : 'var(--detent-band)')
       // A hairline ring and a faint top highlight: a soft lens, not a form field.
       shadows.push(`inset 0 0 0 .5px ${hair}`, 'inset 0 1px 0 var(--detent-glare)')
     } else if (material === 'glass') {
@@ -348,7 +389,11 @@ export function indicatorStyle<T>(o: IndicatorOptions<T>, vertical: boolean): CS
         backdropFilter: 'blur(14px) saturate(1.6)',
         WebkitBackdropFilter: 'blur(14px) saturate(1.6)',
       })
-      shadows.push('inset 0 0 0 1px color-mix(in oklab, var(--detent-fg) 12%, transparent)', 'inset 0 1px 0 rgb(255 255 255 / .4)', '0 8px 24px -12px rgb(0 0 0 / .28)')
+      shadows.push(
+        'inset 0 0 0 1px color-mix(in oklab, var(--detent-fg) 12%, transparent)',
+        'inset 0 1px 0 rgb(255 255 255 / .4)',
+        '0 8px 24px -12px rgb(0 0 0 / .28)',
+      )
     } else if (material === 'outline') shadows.push(`inset 0 0 0 1.5px ${accent}`)
     else {
       const inner = o.background ?? 'Canvas'
@@ -359,7 +404,14 @@ export function indicatorStyle<T>(o: IndicatorOptions<T>, vertical: boolean): CS
       })
     }
   }
-  if (o.shadow && box) shadows.push(o.shadow === true ? '0 6px 16px -6px rgb(0 0 0/.18), 0 1px 2px rgb(0 0 0/.06)' : o.shadow === 'inset' ? 'inset 0 1px 3px rgb(0 0 0/.14)' : o.shadow)
+  if (o.shadow && box)
+    shadows.push(
+      o.shadow === true
+        ? '0 6px 16px -6px rgb(0 0 0/.18), 0 1px 2px rgb(0 0 0/.06)'
+        : o.shadow === 'inset'
+          ? 'inset 0 1px 3px rgb(0 0 0/.14)'
+          : o.shadow,
+    )
   if (shadows.length) st.boxShadow = shadows.join(',')
   if (o.border) st.border = o.border
   return st

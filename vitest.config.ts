@@ -6,7 +6,12 @@ export default defineConfig({
     projects: [
       {
         // The engine and physics: no framework, no DOM unless a file asks for happy-dom.
-        test: { name: 'core', environment: 'node', include: ['test/*.test.ts'], exclude: ['test/*.svelte.test.ts', 'test/ssr.test.ts'] },
+        test: {
+          name: 'core',
+          environment: 'node',
+          include: ['test/*.test.ts'],
+          exclude: ['test/*.svelte.test.ts', 'test/ssr.test.ts'],
+        },
       },
       {
         // Components in a (simulated) browser: Svelte's client build.

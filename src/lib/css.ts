@@ -1,12 +1,31 @@
 /** Inline styles as an object (camelCase or kebab-case keys, numbers get `px` where a length is meant). */
-type StringKeys = { [K in keyof CSSStyleDeclaration]: CSSStyleDeclaration[K] extends string ? K : never }[keyof CSSStyleDeclaration]
-export type CSSProperties = { [K in Exclude<StringKeys, 'length' | 'cssText' | 'parentRule'>]?: string | number | null } & {
+type StringKeys = {
+  [K in keyof CSSStyleDeclaration]: CSSStyleDeclaration[K] extends string ? K : never
+}[keyof CSSStyleDeclaration]
+export type CSSProperties = {
+  [K in Exclude<StringKeys, 'length' | 'cssText' | 'parentRule'>]?: string | number | null
+} & {
   [custom: `--${string}`]: string | number | null | undefined
 }
 
 const UNITLESS = new Set([
-  'opacity', 'z-index', 'flex', 'flex-grow', 'flex-shrink', 'order', 'line-height', 'font-weight', 'scale', 'zoom',
-  'aspect-ratio', 'tab-size', 'orphans', 'widows', 'grid-row', 'grid-column', 'column-count',
+  'opacity',
+  'z-index',
+  'flex',
+  'flex-grow',
+  'flex-shrink',
+  'order',
+  'line-height',
+  'font-weight',
+  'scale',
+  'zoom',
+  'aspect-ratio',
+  'tab-size',
+  'orphans',
+  'widows',
+  'grid-row',
+  'grid-column',
+  'column-count',
 ])
 const kebab = (key: string) => (key.startsWith('--') ? key : key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`))
 
@@ -45,4 +64,5 @@ export function parseStyle(style: string | undefined | null): Record<string, str
 }
 
 /** Accepts either form of the `style` prop. */
-export const styleMap = (style: string | CSSProperties | undefined | null) => (typeof style === 'string' ? parseStyle(style) : parseStyle(cssText(style as Record<string, unknown>)))
+export const styleMap = (style: string | CSSProperties | undefined | null) =>
+  typeof style === 'string' ? parseStyle(style) : parseStyle(cssText(style as Record<string, unknown>))

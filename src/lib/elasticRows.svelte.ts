@@ -1,7 +1,12 @@
 import type { DetentApi } from './types'
 
 type Layer = () => HTMLElement | null
-interface Config { amount: number; pitch: number; vertical: boolean; rtl: boolean }
+interface Config {
+  amount: number
+  pitch: number
+  vertical: boolean
+  rtl: boolean
+}
 
 /** Small independent springs on the rendered rows. The engine, layout and selected position stay unchanged. */
 export function useElasticRows<T>(d: DetentApi<T>, layers: Layer[], config: () => Config) {
@@ -15,7 +20,8 @@ export function useElasticRows<T>(d: DetentApi<T>, layers: Layer[], config: () =
     let last = 0
     let updated = 0
     const nodes = () => layers.flatMap((layer) => Array.from(layer()?.children ?? []) as HTMLElement[])
-    const index = (el: HTMLElement) => Number(el.dataset.detentIndex ?? el.dataset.detentSlot ?? el.dataset.detentMirror)
+    const index = (el: HTMLElement) =>
+      Number(el.dataset.detentIndex ?? el.dataset.detentSlot ?? el.dataset.detentMirror)
     const reset = () => {
       cancelAnimationFrame(raf)
       raf = 0
@@ -46,9 +52,13 @@ export function useElasticRows<T>(d: DetentApi<T>, layers: Layer[], config: () =
           const s = springs.get(j) ?? { x: 0, v: 0 }
           const target = goal * weight
           const w = 0.022 + 0.012 / (1 + distance)
-          const z = 0.75, wd = w * Math.sqrt(1 - z * z)
-          const delta = s.x - target, b = (s.v + z * w * delta) / wd
-          const decay = Math.exp(-z * w * dt), c = Math.cos(wd * dt), sin = Math.sin(wd * dt)
+          const z = 0.75,
+            wd = w * Math.sqrt(1 - z * z)
+          const delta = s.x - target,
+            b = (s.v + z * w * delta) / wd
+          const decay = Math.exp(-z * w * dt),
+            c = Math.cos(wd * dt),
+            sin = Math.sin(wd * dt)
           const next = delta * c + b * sin
           s.x = Math.max(-limit * weight, Math.min(limit * weight, target + decay * next))
           s.v = weight ? decay * (wd * (b * c - delta * sin) - z * w * next) : 0
@@ -71,8 +81,14 @@ export function useElasticRows<T>(d: DetentApi<T>, layers: Layer[], config: () =
         raf = requestAnimationFrame(frame)
       }
     })
-    const preference = () => { if (mq.matches) reset() }
+    const preference = () => {
+      if (mq.matches) reset()
+    }
     mq.addEventListener('change', preference)
-    return () => { off(); mq.removeEventListener('change', preference); reset() }
+    return () => {
+      off()
+      mq.removeEventListener('change', preference)
+      reset()
+    }
   })
 }
