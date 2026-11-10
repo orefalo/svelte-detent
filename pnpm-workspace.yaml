@@ -1,5 +1,2 @@
-packages:
-  - .
-  - svelte
 allowBuilds:
   esbuild: true

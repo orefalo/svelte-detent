@@ -6,7 +6,7 @@
 import { readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEngine, type WheelMode } from '../src'
+import { createEngine, type WheelMode } from '../src/lib/core'
 
 interface Sample { t: number; dx: number; dy: number; mode: number; wdx: number | null; wdy: number | null }
 interface Take { label: string; samples: Sample[] }

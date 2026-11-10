@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { haptics, tickSound, ticks } from '../src/feedback'
+import { haptics, tickSound, ticks } from '../src/lib/core/feedback'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -61,7 +61,7 @@ describe('tickSound', () => {
 
   it('never starts audio from a tick: only after a gesture, once the wheel has been quiet, shared by every handler', async () => {
     vi.resetModules()
-    const { tickSound } = await import('../src/feedback')
+    const { tickSound } = await import('../src/lib/core/feedback')
     const gains: number[] = []
     const Ctx = fakeContext(gains)
     const activation = { hasBeenActive: false }
@@ -96,7 +96,7 @@ describe('tickSound', () => {
 
   it('after an earlier gesture, starts on its own shortly after it is created', async () => {
     vi.resetModules()
-    const { tickSound } = await import('../src/feedback')
+    const { tickSound } = await import('../src/lib/core/feedback')
     const Ctx = fakeContext([])
     vi.stubGlobal('AudioContext', Ctx)
     vi.stubGlobal('navigator', { ...navigator, userActivation: { hasBeenActive: true } })
@@ -132,7 +132,7 @@ describe('ticks options', () => {
 
 it('dynamic timbre follows absolute velocity while the default timbre stays fixed', async () => {
   vi.resetModules()
-  const { tickSound } = await import('../src/feedback')
+  const { tickSound } = await import('../src/lib/core/feedback')
   const filters: { frequency: { value: number }; Q: { value: number } }[] = []
   vi.stubGlobal('AudioContext', fakeContext([], filters))
   vi.stubGlobal('navigator', { ...navigator, userActivation: { hasBeenActive: true } })

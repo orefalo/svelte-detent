@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { crossings, presets, project, release, resolvePhysics, tau, type Bounds } from '../src'
+import { crossings, presets, project, release, resolvePhysics, tau, type Bounds } from '../src/lib/core'
 import { sample } from './helpers'
 
 const H = 36

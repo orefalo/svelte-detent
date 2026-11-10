@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { crossings, mod, nearest, rubberClamp, rubberband } from '../src'
+import { crossings, mod, nearest, rubberClamp, rubberband } from '../src/lib/core'
 
 const b = { min: 0, max: 9, loop: false, count: 10 }
 

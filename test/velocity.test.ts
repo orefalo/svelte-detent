@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { velocityTracker } from '../src'
+import { velocityTracker } from '../src/lib/core'
 
 describe('velocityTracker', () => {
   it('is exact for constant velocity at any sampling rate', () => {

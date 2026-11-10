@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { dampingFor, dampingRatio, REST_DELTA, spring, type SpringConfig } from '../src'
+import { dampingFor, dampingRatio, REST_DELTA, spring, type SpringConfig } from '../src/lib/core'
 import { rk4, sample } from './helpers'
 
 const cfg = (k: number, zeta: number, m = 1): SpringConfig => ({ stiffness: k, damping: dampingFor(zeta, k, m), mass: m })

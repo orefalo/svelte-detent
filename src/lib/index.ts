@@ -1,0 +1,13 @@
+export { default as Detent } from './Detent.svelte'
+export { default as DetentText } from './DetentText.svelte'
+export { default as DetentNumber } from './DetentNumber.svelte'
+export { createDetent } from './createDetent.svelte'
+export type { CSSProperties } from './css'
+export type { DetentProps, Easing, Falloff, GradientBlur, ItemState } from './props'
+export type { IndicatorMaterial, IndicatorOptions, IndicatorShape, IndicatorState } from './indicator.svelte'
+export type { Attrs, DetentApi, DetentFrame, DetentOptions, DetentRow, DetentSlot, Key, Slot } from './types'
+// The framework-free parts, for convenience.
+export { createEngine, ios, presets, resolvePhysics, numberTokens } from './core'
+export type { Engine, Physics, PhysicsOptions, PresetName } from './core'
+export { haptics, tickSound, ticks } from './core/feedback'
+export type { HapticsOptions, TickHandler, TickSoundOptions, TicksOptions } from './core/feedback'

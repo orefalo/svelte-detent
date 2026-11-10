@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { coast, coastTimeTo, project, tau } from '../src'
+import { coast, coastTimeTo, project, tau } from '../src/lib/core'
 
 describe('decay', () => {
   it('iOS normal deceleration rate has τ ≈ 499.5ms', () => {

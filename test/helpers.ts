@@ -1,4 +1,4 @@
-import type { Motion } from '../src'
+import type { Motion } from '../src/lib/core'
 
 /** Sample a motion like a rAF loop at `hz`, with optional jitter, until rest. */
 export function sample(m: Motion, hz: number, jitter = 0, seed = 1) {

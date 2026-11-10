@@ -6,7 +6,7 @@
 import { readdirSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { createEngine } from '../src'
+import { createEngine } from '../src/lib/core'
 
 interface Sample { t: number; x: number; y: number; type: 'down' | 'move' | 'up' | 'cancel' }
 interface Gesture { source: 'device' | 'synthetic'; label: string; pointerType: string; device: { hz: number; dpr: number }; samples: Sample[] }

@@ -1,4 +1,24 @@
-import { configDefaults, defineConfig } from 'vitest/config'
+import { svelte } from '@sveltejs/vite-plugin-svelte'
+import { defineConfig } from 'vitest/config'
 
-// The Svelte package has its own suite (svelte/), run with its own config.
-export default defineConfig({ test: { exclude: [...configDefaults.exclude, 'svelte/**'] } })
+export default defineConfig({
+  test: {
+    projects: [
+      {
+        // The engine and physics: no framework, no DOM unless a file asks for happy-dom.
+        test: { name: 'core', environment: 'node', include: ['test/*.test.ts'], exclude: ['test/*.svelte.test.ts', 'test/ssr.test.ts'] },
+      },
+      {
+        // Components in a (simulated) browser: Svelte's client build.
+        plugins: [svelte({ hot: false })],
+        resolve: { conditions: ['browser'] },
+        test: { name: 'client', environment: 'happy-dom', include: ['test/**/*.svelte.test.ts'] },
+      },
+      {
+        // Server rendering: Svelte's server build, no DOM.
+        plugins: [svelte({ hot: false })],
+        test: { name: 'server', environment: 'node', include: ['test/ssr.test.ts'] },
+      },
+    ],
+  },
+})

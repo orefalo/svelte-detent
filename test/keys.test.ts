@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 /** Holding an arrow key (keyAcceleration): progressive, predictable, and it stops when the key comes up. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { createEngine, type EngineOptions } from '../src'
+import { createEngine, type EngineOptions } from '../src/lib/core'
 
 const REPEAT = 1000 / 30 // a typical OS key repeat
 const SIZE = 40
