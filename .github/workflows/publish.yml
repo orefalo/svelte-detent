@@ -5,6 +5,7 @@ name: Publish to npm
 on:
   push:
     tags: ['svelte-v*']
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -20,8 +21,8 @@ jobs:
         with:
           node-version: 24
           cache: pnpm
-          registry-url: https://registry.npmjs.org
       - name: The tag must match package.json
+        if: github.ref_type == 'tag'
         run: test "svelte-v$(node -p "require('./package.json').version")" = "$GITHUB_REF_NAME"
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
