@@ -1,10 +1,10 @@
-# Port to Svelte
+# svelte-detent
 
-This is an unofficial port of detent to Svelte.
+A Svelte 5 wheel picker that clicks into place: an unofficial port of [detent](https://github.com/hayderkg/detent) by Hayder (`@hayderkg/detent`, React).
 
-Claude code takes all the credit for the conversion. The original code is well written and I got it working in perfectly in about 10 prompts.
+Claude code takes all the credit for the conversion. The original code is well written and I got it working perfectly in about 10 prompts.
 
-# detent
+# detent (original)
 
 A wheel picker for Svelte and React that clicks into place.
 
@@ -20,15 +20,15 @@ Docs, playground and examples: **[detent.hayder.sh](https://detent.hayder.sh)**.
 npm i @hayderkg/detent
 ```
 
-### Svelte 5
+### Svelte 5 (`svelte-detent`)
 
 ```sh
-npm i @hayderkg/detent-svelte @hayderkg/detent
+npm i svelte-detent @hayderkg/detent
 ```
 
 ```svelte
 <script>
-  import { Detent, DetentText, DetentNumber } from '@hayderkg/detent-svelte'
+  import { Detent, DetentText, DetentNumber } from 'svelte-detent'
   let month = $state('Mar')
 </script>
 
@@ -39,6 +39,9 @@ npm i @hayderkg/detent-svelte @hayderkg/detent
 <DetentText text={month} />
 <DetentNumber value={1234.5} format={{ style: 'currency', currency: 'USD' }} />
 ```
+
+Try the examples locally: `cd svelte && pnpm dev` opens http://localhost:5173/examples/, a Svelte copy of
+[detent.hayder.sh/examples](https://detent.hayder.sh/examples).
 
 The props match the React component. Differences: `renderItem` is the `item` snippet, `renderIndicator` is
 `indicatorContent`, `header`/`footer`/`emptyState`/`loadingRow` are snippets, `DetentText` takes `text` instead of

@@ -1,130 +1,109 @@
 <script lang="ts">
-  // In your app: import { DetentNumber } from '@hayderkg/detent-svelte'
+  // In your app: import { DetentNumber } from 'svelte-detent'
   import { DetentNumber } from '../../src/lib'
+  import RecipeCode from '../site/RecipeCode.svelte'
 
-  type Tab = 'counter' | 'currency' | 'percentage'
-  const tabs: { id: Tab; label: string }[] = [
-    { id: 'counter', label: 'Counter' },
-    { id: 'currency', label: 'Currency' },
-    { id: 'percentage', label: 'Percentage' },
-  ]
-  const values: Record<Tab, number[]> = {
-    counter: [99, 100, 999, 1000],
-    currency: [1249.9, 2000, 1999.99, 99.99],
-    percentage: [0.125, -0.032, 0, 0.0784],
+  const tabs = ['Counter', 'Currency', 'Percentage'] as const
+  type Tab = (typeof tabs)[number]
+  const recipes: Record<Tab, { values: number[]; format: Intl.NumberFormatOptions }> = {
+    Currency: { values: [1249.9, 2000, 1999.99, 99.99, 100, -48.5, 12890.75], format: { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 } },
+    Counter: { values: [99, 100, 999, 1000, 9999, 10000, 9, 0, -12], format: { maximumFractionDigits: 0 } },
+    Percentage: { values: [0.125, -0.032, 0, 0.0784, -0.0045, 0.9999], format: { style: 'percent', signDisplay: 'exceptZero', minimumFractionDigits: 1, maximumFractionDigits: 2 } },
   }
+  /** The parts of the formatted number that get their own look. */
+  const parts = { currency: 'rolling-currency', fraction: 'rolling-fraction', decimal: 'rolling-fraction', group: 'rolling-group', sign: 'rolling-sign', unit: 'rolling-sign' }
   const captions: Record<Tab, string> = {
-    counter: 'From 99 to 100. Then back again.',
-    currency: 'Across thousands, cents, and a change of sign.',
-    percentage: 'Up, down, and back through zero.',
+    Currency: 'Across thousands, cents, and a change of sign.',
+    Counter: 'From 99 to 100. Then back again.',
+    Percentage: 'Up, down, and back through zero.',
   }
-  const formats: Record<'en' | 'de', Record<Tab, { locales: string; format?: Intl.NumberFormatOptions }>> = {
-    en: {
-      counter: { locales: 'en-US' },
-      currency: { locales: 'en-US', format: { style: 'currency', currency: 'USD' } },
-      percentage: { locales: 'en-US', format: { style: 'percent', signDisplay: 'exceptZero', minimumFractionDigits: 1, maximumFractionDigits: 2 } },
-    },
-    de: {
-      counter: { locales: 'de-DE' },
-      currency: { locales: 'de-DE', format: { style: 'currency', currency: 'EUR' } },
-      percentage: { locales: 'de-DE', format: { style: 'percent', signDisplay: 'exceptZero', minimumFractionDigits: 1, maximumFractionDigits: 2 } },
-    },
+  /** The code panel: one per tab and language (the page's own snippets, in Svelte). */
+  const snippets: Record<Tab, [string, string]> = {
+    Counter: ['<DetentNumber value={count} locales="en-US" />', '<DetentNumber value={count} locales="de-DE" />'],
+    Currency: [
+      `<DetentNumber value={price} locales="en-US"\n  format={{ style: 'currency', currency: 'USD' }} />`,
+      `<DetentNumber value={price} locales="de-DE"\n  format={{ style: 'currency', currency: 'EUR' }} />`,
+    ],
+    Percentage: [
+      `// 0.125 → +12.5%\n<DetentNumber value={change} locales="en-US"\n  format={{ style: 'percent', signDisplay: 'exceptZero',\n    maximumFractionDigits: 2 }} />`,
+      `// 0.125 → +12,5 %\n<DetentNumber value={change} locales="de-DE"\n  format={{ style: 'percent', signDisplay: 'exceptZero',\n    maximumFractionDigits: 2 }} />`,
+    ],
   }
-  const snippets: Record<Tab, string> = {
-    counter: `<DetentNumber value={count} locales="en-US" />`,
-    currency: `<DetentNumber value={price} locales="en-US"\n  format={{ style: 'currency', currency: 'USD' }} />`,
-    percentage: `// 0.125 → +12.5%\n<DetentNumber value={change} locales="en-US"\n  format={{ style: 'percent', signDisplay: 'exceptZero',\n    maximumFractionDigits: 2 }} />`,
-  }
-  const importLine = `import { DetentNumber } from '@hayderkg/detent-svelte'`
+  const importLine = `import { DetentNumber } from 'svelte-detent'`
 
-  let tab = $state<Tab>('counter')
-  let lang = $state<'en' | 'de'>('en')
-  let step = $state(0)
-  const value = $derived(values[tab][step]!)
-  const f = $derived(formats[lang][tab])
-  let copied = $state(false)
+  let tab = $state<Tab>('Counter')
+  let index = $state(0)
+  let german = $state(false)
 
-  const go = (d: number) => (step = (step + d + 4) % 4)
-  const pick = (t: Tab) => ((tab = t), (step = 0))
+  const recipe = $derived(recipes[tab])
+  const value = $derived(recipe.values[index % recipe.values.length]!)
+  const format = $derived(tab === 'Currency' ? { ...recipe.format, currency: german ? 'EUR' : 'USD' } : recipe.format)
+  const code = $derived(`${importLine}\n\n${snippets[tab][Number(german)]}`)
+  const step = (d: number) => (index = (index + d + recipe.values.length) % recipe.values.length)
 
-  const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;')
-  /** Light syntax colouring, in one pass so a replacement is never matched again. */
-  const hl = (code: string) =>
-    esc(code).replace(
-      /(\/\/.*$)|('[^']*'|"[^"]*")|\b(import|from)\b|&lt;(DetentNumber)|\b(value|locales|format)=/gm,
-      (_m, comment, str, kw, tag, attr) =>
-        comment ? `<i class="c">${comment}</i>` : str ? `<i class="s">${str}</i>` : kw ? `<i class="k">${kw}</i>` : tag ? `&lt;<i class="t">${tag}</i>` : `<i class="a">${attr}</i>=`,
-    )
-  const full = $derived(`${importLine}\n\n${snippets[tab]}`)
-
-  async function copy() {
-    try {
-      await navigator.clipboard.writeText(full)
-      copied = true
-      setTimeout(() => (copied = false), 1200)
-    } catch {
-      /* clipboard unavailable */
-    }
-  }
+  const paths = { swap: 'M3 6h13m-3-3 3 3-3 3M17 14H4m3-3-3 3 3 3', back: 'M16 10H4m5-5-5 5 5 5', next: 'M4 10h12m-5-5 5 5-5 5' } as const
 </script>
 
-<div class="demo">
-  <div class="bar">
-    <div class="tabs" role="tablist">
-      {#each tabs as t (t.id)}
-        <button type="button" role="tab" aria-selected={tab === t.id} class:on={tab === t.id} onclick={() => pick(t.id)}>{t.label}</button>
-      {/each}
+{#snippet icon(name: keyof typeof paths)}
+  <svg aria-hidden="true" width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display:inline-block;vertical-align:-2px"><path d={paths[name]} /></svg>
+{/snippet}
+
+<div class="value-recipe">
+  <div class="rolling-demo">
+    <div class="rolling-toolbar">
+      <div role="group" aria-label="Number example" class="rolling-tabs">
+        {#each tabs as t (t)}
+          <button type="button" aria-pressed={tab === t} onclick={() => ((tab = t), (index = 0))}>{t}</button>
+        {/each}
+      </div>
+      <button type="button" class="rolling-locale" aria-label="Switch number format to {german ? 'English' : 'German'}" onclick={() => (german = !german)}>
+        {german ? 'DE' : 'EN'} {@render icon('swap')}
+      </button>
     </div>
-    <button type="button" class="lang" aria-label="Switch number format to {lang === 'en' ? 'German' : 'English'}" onclick={() => (lang = lang === 'en' ? 'de' : 'en')}>
-      {lang.toUpperCase()}
-      <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M2 5.5h11M10.5 3 13 5.5 10.5 8M14 10.5H3M5.5 8 3 10.5 5.5 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" /></svg>
-    </button>
-  </div>
 
-  <div class="number"><DetentNumber {value} locales={f.locales} format={f.format} /></div>
-
-  <div class="steps">
-    <button type="button" class="prev" aria-label="Previous value" onclick={() => go(-1)}>
-      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M13 8H3m4-4L3 8l4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
-    </button>
-    <button type="button" class="next" onclick={() => go(1)}>
-      Next value
-      <svg viewBox="0 0 16 16" width="12" height="12" aria-hidden="true"><path d="M3 8h10M9 4l4 4-4 4" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" /></svg>
-    </button>
-  </div>
-  <p class="caption">{captions[tab]}</p>
-
-  <div class="code">
-    <div class="head">
-      <span>@hayderkg/detent-svelte</span>
-      <button type="button" aria-label="Copy" onclick={copy}>{copied ? '✓' : 'copy'}</button>
+    <div class="rolling-stage" style:color={tab === 'Percentage' ? (value < 0 ? '#dc2626' : value > 0 ? '#16a34a' : undefined) : undefined}>
+      <output aria-live="polite" aria-atomic="true"><DetentNumber {value} locales={german ? 'de-DE' : 'en-US'} {format} classNames={parts} /></output>
     </div>
-    <pre>{@html hl(full)}</pre>
+
+    <div class="rolling-controls">
+      <button type="button" class="rolling-back" aria-label="Previous value" onclick={() => step(-1)}>{@render icon('back')}</button>
+      <button type="button" class="rolling-next" onclick={() => step(1)}>Next value <span>{@render icon('next')}</span></button>
+    </div>
+    <p class="rolling-caption">{captions[tab]}</p>
   </div>
+
+  <RecipeCode {code} tag="DetentNumber" attrs={['value', 'locales', 'format']} />
 </div>
 
 <style>
-  .demo { display: grid; justify-items: center; gap: 18px; width: 100%; font-family: system-ui, sans-serif; }
-  .bar { display: flex; justify-content: space-between; align-items: center; width: 100%; max-width: 360px; }
-  .tabs { display: flex; gap: 12px; }
-  .tabs button, .lang { border: 0; background: none; padding: 0; font: 500 11px/1 system-ui, sans-serif; color: #999; cursor: pointer; }
-  .tabs button.on { color: #0a0a0a; font-weight: 600; }
-  .lang { display: flex; align-items: center; gap: 4px; font-family: ui-monospace, monospace; color: #666; }
-  .number { margin: 14px 0 6px; font-size: 64px; font-weight: 550; line-height: 1.1; letter-spacing: -0.02em; min-height: 70px; }
-  .steps { display: flex; align-items: center; gap: 6px; }
-  .prev { display: grid; place-items: center; width: 28px; height: 28px; border-radius: 50%; border: 1px solid #e3e3e3; background: none; color: inherit; cursor: pointer; }
-  .next { display: flex; align-items: center; gap: 8px; height: 28px; padding: 0 12px; border: 0; border-radius: 999px; background: #0a0a0a; color: #fff; font: 500 11px system-ui, sans-serif; cursor: pointer; }
-  .caption { margin: 0; font-size: 11px; color: #777; }
-  .code { width: 100%; margin-top: 8px; border: 1px solid #ececec; border-radius: 10px; background: #fafafa; overflow: hidden; text-align: left; }
-  .head { display: flex; justify-content: space-between; align-items: center; padding: 8px 12px; border-bottom: 1px solid #ececec; font: 11px ui-monospace, monospace; color: #888; }
-  .head button { border: 0; background: none; font: inherit; color: #888; cursor: pointer; }
-  pre { margin: 0; padding: 12px; font: 11.5px/1.7 ui-monospace, 'SF Mono', Menlo, monospace; overflow-x: auto; }
-  pre :global(i) { font-style: normal; }
-  pre :global(.k) { color: #d73a49; } pre :global(.s) { color: #1c4a8f; } pre :global(.t) { color: #3560d3; }
-  pre :global(.a) { color: #6f42c1; } pre :global(.c) { color: #8a8a8a; }
+  .value-recipe { --fg: #111; --bg: #fff; --muted: #888; --line: #ddd; --accent: #ff5a1f; width: 100%; min-width: 0; font-family: system-ui, sans-serif; }
+  .value-recipe > :global(.code) { margin-top: 14px; }
+
+  .rolling-stage :global(.rolling-currency) { font-size: 0.55em; color: var(--muted); margin-inline: 0.05em; }
+  .rolling-stage :global(.rolling-fraction) { font-size: 0.72em; }
+  .rolling-stage :global(.rolling-group) { opacity: 0.4; }
+  .rolling-stage :global(.rolling-sign) { font-size: 0.65em; }
+  .rolling-demo { width: 100%; max-width: 420px; margin: 0 auto; display: grid; justify-items: center; gap: 20px; padding: 8px 0; }
+  .rolling-toolbar { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 12px; }
+  .rolling-tabs { display: flex; gap: 14px; }
+  .rolling-demo button { font: inherit; color: inherit; border: 0; background: none; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+  .rolling-tabs button { padding: 6px 0; opacity: 0.45; transition: opacity 150ms ease; }
+  .rolling-tabs button[aria-pressed='true'] { opacity: 1; font-weight: 600; }
+  .rolling-demo .rolling-locale { display: inline-flex; align-items: center; gap: 6px; font-family: 'Geist Mono', ui-monospace, monospace; font-size: 11px; opacity: 0.65; padding: 6px 0; }
+  .rolling-stage { width: 100%; min-height: 132px; display: grid; place-items: center; font-size: clamp(40px, 7vw, 64px); font-weight: 550; letter-spacing: -0.035em; }
+  .rolling-stage output { display: block; line-height: 1; }
+  .rolling-controls { display: flex; gap: 8px; font-size: 13px; }
+  .rolling-controls button { height: 36px; border-radius: 99px; transition: transform 150ms ease, background-color 150ms ease; }
+  .rolling-back { width: 36px; box-shadow: inset 0 0 0 1px var(--line); }
+  .rolling-demo .rolling-next { padding: 0 18px; background: var(--fg); color: var(--bg); }
+  .rolling-next span { display: inline-block; margin-left: 14px; opacity: 0.6; }
+  .rolling-controls button:active { transform: scale(0.96); }
+  .rolling-demo button:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+  .rolling-demo p.rolling-caption { font-family: system-ui, sans-serif; margin: 0; font-size: 12px; color: var(--muted); text-align: center; line-height: 1.4; }
+  @media (hover: hover) { .rolling-tabs button:hover { opacity: 1; } .rolling-back:hover { background: #eee; } }
+  @media (prefers-reduced-motion: reduce) { .rolling-demo button { transition: none; } }
   @media (prefers-color-scheme: dark) {
-    .tabs button.on { color: #ededed; } .next { background: #ededed; color: #0a0a0a; } .prev { border-color: #333; }
-    .code { background: #111; border-color: #262626; } .head { border-color: #262626; }
-    pre :global(.k) { color: #ff7b72; } pre :global(.s) { color: #a5d6ff; } pre :global(.t) { color: #79c0ff; } pre :global(.a) { color: #d2a8ff; }
+    .value-recipe { --fg: #ededed; --bg: #0a0a0a; --line: #333; }
+    @media (hover: hover) { .rolling-back:hover { background: #222; } }
   }
 </style>

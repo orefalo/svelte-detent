@@ -2,13 +2,23 @@
   import type { Component } from 'svelte'
   import { intro, sections } from './sections'
 
-  // Each example is its own chunk, mounted only when its card nears the viewport.
+  // Each example is its own chunk, mounted only while its card is near the viewport.
   const loaders = import.meta.glob('../examples/*.svelte', { import: 'default' }) as Record<string, () => Promise<Component>>
   const load = (file: string) => loaders[`../examples/${file}.svelte`]!()
 
-  /** Marks the element visible once it is within 400px of the viewport (and keeps it so). */
-  function near(node: HTMLElement, set: () => void) {
-    const io = new IntersectionObserver((e) => e.some((x) => x.isIntersecting) && (set(), io.disconnect()), { rootMargin: '400px 0px' })
+  /**
+   * Tells `set` whether the element is within 600px of the viewport. An example that scrolls far away is unmounted, which
+   * stops its animation loops (canvas, WebGL, timers); the card keeps its height so the page does not jump.
+   */
+  function near(node: HTMLElement, set: (visible: boolean) => void) {
+    const io = new IntersectionObserver(
+      (entries) => {
+        const visible = entries.at(-1)!.isIntersecting
+        if (!visible) node.style.minHeight = `${node.offsetHeight}px`
+        set(visible)
+      },
+      { rootMargin: '600px 0px' },
+    )
     io.observe(node)
     return { destroy: () => io.disconnect() }
   }
@@ -26,7 +36,7 @@
 
 <header>
   <nav>
-    <a class="logo" href="/examples/">Detent</a>
+    <a class="logo" href="/examples/">svelte-detent</a>
     <a class="on" href="/examples/">Examples</a>
     <a href="{site}/playground">Playground</a>
     <a href="{site}/docs">Docs</a>
@@ -51,7 +61,7 @@
         <article id={e.id}>
           <h3>{e.title}</h3>
           <p class="lead">{e.description}</p>
-          <div class="card" use:near={() => (seen[e.id] = true)}>
+          <div class="card" use:near={(visible) => (seen[e.id] = visible)}>
             {#if seen[e.id]}
               {#await load(e.file) then Example}<Example />{:catch err}<p class="err">{String(err)}</p>{/await}
             {/if}

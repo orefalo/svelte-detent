@@ -1,92 +1,106 @@
 <script lang="ts">
-  // In your app: import { Detent } from '@hayderkg/detent-svelte'
+  // In your app: import { Detent } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
+  import { onDestroy } from 'svelte'
   import { Detent } from '../../src/lib'
 
-  interface Commit { id: string; title: string; hash: string; author: string; when: string }
+  /** Replace `base` with wherever you host the avatars. */
+  let { base = 'https://detent.hayder.sh' }: { base?: string } = $props()
+
+  interface Commit { id: number; title: string; hash: string; author: { name: string; avatar: string | null }; when: string }
   const titles = [
     'fix: settle on the nearest enabled row',
-    'style: softer default band',
-    'test: replay real wheel recordings',
-    'refactor: release planner',
-    'feat: horizontal centering',
-    'docs: wheelMode and feedback',
-    'perf: one style write per frame',
     'feat: catch window for the indicator',
+    'perf: one style write per frame',
+    'docs: wheelMode and feedback',
+    'feat: horizontal centering',
+    'refactor: release planner',
+    'test: replay real wheel recordings',
+    'style: softer default band',
   ]
-  const authors = ['Hayder', 'Lea', 'Kenji', 'Ana']
-  const avatars: Record<string, string> = {
-    Hayder: 'https://detent.hayder.sh/avatar.jpg',
-    Kenji: 'https://detent.hayder.sh/avatars/kenji.webp',
-    Ana: 'https://detent.hayder.sh/avatars/ana.webp',
-  }
-  const PAGE = 30
-  /** Commit `i`, newest first. Hashes are a stable pseudo-random hex string. */
-  const commit = (i: number): Commit => ({
-    id: String(i),
-    title: titles[i % titles.length]!,
-    hash: (Math.imul(i + 1, 2654435761) >>> 0).toString(16).padStart(8, '0').slice(0, 7),
-    author: authors[i % authors.length]!,
-    when: i + 1 < 60 ? `${i + 1}m` : `${Math.floor((i + 1) / 60)}h`,
-  })
+  const authors = [
+    { name: 'Hayder', avatar: '/avatar.jpg' },
+    { name: 'Ana', avatar: '/avatars/ana.webp' },
+    { name: 'Kenji', avatar: '/avatars/kenji.webp' },
+    { name: 'Lea', avatar: null },
+  ]
+  /** A page of 30 commits starting at `from`. */
+  const page = (from: number): Commit[] =>
+    Array.from({ length: 30 }, (_, k) => {
+      const i = from + k
+      return {
+        id: i,
+        title: titles[(7 * i) % titles.length]!,
+        hash: (((i + 1) * 0x9e3779b1) >>> 0).toString(16).padStart(8, '0').slice(0, 7),
+        author: authors[(3 * i) % authors.length]!,
+        when: i < 60 ? `${i + 1}m` : `${Math.floor(i / 60)}h`,
+      }
+    })
 
-  let commits = $state<Commit[]>(Array.from({ length: PAGE }, (_, i) => commit(i)))
+  const tick = ticks({ sound: true, haptics: true })
+  let commits = $state<Commit[]>(page(0))
   let loading = $state(false)
-  // Starts on the fourth commit, so there are rows above it too.
-  let selected = $state<Commit | undefined>(commits[3])
+  let timer: ReturnType<typeof setTimeout> | undefined
+  onDestroy(() => clearTimeout(timer))
+  // svelte-ignore state_referenced_locally
+  const first = commits[3]
 
   function more() {
-    if (loading) return
+    if (timer) return
     loading = true
-    // Pretend the network takes a moment.
-    setTimeout(() => {
-      const start = commits.length
-      commits = [...commits, ...Array.from({ length: PAGE }, (_, i) => commit(start + i))]
+    timer = setTimeout(() => {
+      commits = [...commits, ...page(commits.length)]
       loading = false
-    }, 600)
+      timer = undefined
+    }, 700)
   }
 </script>
 
 <div class="load">
   <Detent
+    onTick={tick}
     items={commits}
-    bind:value={selected}
     getKey={(c) => c.id}
     getLabel={(c) => c.title}
+    defaultValue={first}
     label="History"
     itemHeight={54}
     visibleCount={7}
-    curvature={0.6}
     width="min(320px, 100%)"
+    align="start"
+    curvature={0.6}
+    magnify={false}
     {loading}
     onEndReached={more}
   >
+    {#snippet loadingRow()}<span class="loading">Loading…</span>{/snippet}
     {#snippet item(c: Commit)}
       <span class="commit">
-        <span class="avatar">
-          {#if avatars[c.author]}<img src={avatars[c.author]} alt="" draggable="false" />{:else}{c.author[0]}{/if}
+        <span class="avatar" aria-hidden="true">
+          {#if c.author.avatar}<img src="{base}{c.author.avatar}" alt="" width="26" height="26" loading="lazy" decoding="async" />{:else}{c.author.name[0]}{/if}
         </span>
         <span class="text">
           <span class="title">{c.title}</span>
           <span class="meta">
-            <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><circle cx="8" cy="8" r="3" fill="none" stroke="currentColor" stroke-width="1.5" /><path d="M1 8h4M11 8h4" stroke="currentColor" stroke-width="1.5" /></svg>
-            <span class="hash">{c.hash}</span>
-            <span>· {c.author} · {c.when}</span>
+            <svg aria-hidden="true" viewBox="0 0 16 16" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="2.6" /><path d="M1 8h4.4M10.6 8H15" /></svg>
+            <span class="mono">{c.hash}</span>· {c.author.name} · {c.when}
           </span>
         </span>
       </span>
     {/snippet}
   </Detent>
-  <span class="count">{commits.length} rows · throw it to the end</span>
+  <span class="mono count">{commits.length} rows · throw it to the end</span>
 </div>
 
 <style>
-  .load { display: grid; justify-items: center; gap: 10px; }
-  .commit { display: flex; align-items: center; gap: 10px; width: 288px; height: 44px; padding: 0 14px; box-sizing: border-box; text-align: start; }
-  .avatar { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 50%; background: rgb(128 128 128 / 0.16); font: 600 11px system-ui, sans-serif; overflow: hidden; }
-  .avatar img { width: 26px; height: 26px; border-radius: 50%; object-fit: cover; }
+  .load { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 12px; width: 100%; }
+  .mono { font-family: 'Geist Mono', ui-monospace, monospace; }
+  .count { font-size: 12px; opacity: 0.6; }
+  .loading { font-size: 13px; opacity: 0.5; padding-left: 16px; }
+  .commit { display: flex; align-items: center; gap: 10px; width: 100%; padding-inline: 14px; min-width: 0; box-sizing: border-box; }
+  .avatar { display: grid; place-items: center; flex: none; width: 26px; height: 26px; border-radius: 13px; background: rgb(128 128 128 / 0.16); color: inherit; font-size: 11px; font-weight: 600; }
+  .avatar img { width: 26px; height: 26px; object-fit: cover; border-radius: 50%; }
   .text { display: grid; gap: 2px; min-width: 0; }
-  .title { overflow: hidden; text-overflow: ellipsis; font: 13.5px system-ui, sans-serif; }
-  .meta { display: flex; align-items: center; gap: 5px; font: 11.5px system-ui, sans-serif; opacity: 0.6; }
-  .hash { font: 12.5px ui-monospace, 'SF Mono', Menlo, monospace; }
-  .count { font: 12px ui-monospace, 'SF Mono', Menlo, monospace; color: #6b6b6b; }
+  .title { font-size: 13.5px; overflow: hidden; text-overflow: ellipsis; }
+  .meta { display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; opacity: 0.55; }
 </style>

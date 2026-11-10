@@ -1,208 +1,313 @@
 <script lang="ts">
-  // In your app: import { Detent, DetentText } from '@hayderkg/detent-svelte'
+  // In your app: import { Detent, DetentText } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
+  import { onMount, untrack } from 'svelte'
   import { Detent, DetentText } from '../../src/lib'
+  import {
+    CITIES, HOME, MORE, NEARBY, QUARTERS, clockFace, dayStrip, homeTint, moonPath, moonPhase, paintSky, weatherAt, weatherUrl, zoneParts, zonedDate,
+    type Weather,
+  } from '../site/TzData.svelte'
+  import TzSky from '../site/TzSky.svelte'
+  import { css, theme } from '../site/TzStyles.svelte'
 
-  const HOME = { name: 'Madrid', tz: 'Europe/Madrid' }
-  const CITIES = [
-    HOME,
-    { name: 'New York', tz: 'America/New_York' },
-    { name: 'London', tz: 'Europe/London' },
-    { name: 'Tokyo', tz: 'Asia/Tokyo' },
-    { name: 'Sydney', tz: 'Australia/Sydney' },
-    { name: 'Los Angeles', tz: 'America/Los_Angeles' },
-    { name: 'Dubai', tz: 'Asia/Dubai' },
-    { name: 'Singapore', tz: 'Asia/Singapore' },
-  ]
-  const QUARTERS = Array.from({ length: 96 }, (_, i) => i)
-  const MIN = 60_000
+  const uid = $props.id()
+  const grain = `${uid}-grain`
+  const tick = ticks({ sound: { volume: 0.2 }, haptics: true })
 
-  /** Wall-clock parts of an instant in a zone. */
-  const parts = (at: number, tz: string) => {
-    const p = Object.fromEntries(
-      new Intl.DateTimeFormat('en-US', { timeZone: tz, hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric' })
-        .formatToParts(at)
-        .map((x) => [x.type, +x.value]),
-    ) as Record<'year' | 'month' | 'day' | 'hour' | 'minute', number>
-    const local = Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute)
-    return { ...p, day0: Date.UTC(p.year, p.month - 1, p.day), offset: Math.round((local - Math.floor(at / MIN) * MIN) / MIN) }
-  }
+  // --- the day: Madrid's, from today, scrubbed in quarter hours ----------------------------------------------------
+  const init = (() => {
+    const z = zoneParts(HOME.tz, new Date())
+    const [y, m, d] = z.date.split('-').map(Number) as [number, number, number]
+    return { y, m, d, q: Math.floor(4 * z.hour) }
+  })()
+  /** The scrub position (a quarter of the day) and how many days the scrub has wrapped past today. */
+  let quarter = $state(init.q)
+  let dayShift = $state(0)
+  /** Which way the rolling labels turn: the way the scrub moves. */
+  let direction = $state<'up' | 'down'>('up')
+  /** "Now" jumps; the day shift must not follow that jump through midnight. */
+  let jumped = false
+  let lastQuarter = init.q
+  /** The wheel's position in hours, every frame (the skies move between ticks). */
+  let liveHour = init.q / 4
+  let expanded = $state(false)
 
-  // The scrub covers the home zone's day, in quarter hours, starting from now.
-  const start = Math.floor(Date.now() / (15 * MIN)) * 15 * MIN
-  const h0 = parts(start, HOME.tz)
-  const midnight = Date.UTC(h0.year, h0.month - 1, h0.day) - h0.offset * MIN
-  const nowQuarter = Math.round((start - midnight) / (15 * MIN))
-
-  let quarter = $state(nowQuarter)
-  let h24 = $state(false)
-  let more = $state(false)
-  const instant = $derived(midnight + quarter * 15 * MIN)
-  const home = $derived(parts(instant, HOME.tz))
-  const shown = $derived(more ? CITIES : CITIES.slice(0, 5))
-
-  const money = (n: number) => (n < 0 ? '−' : '+') + Math.abs(n)
-  const hhmm = (p: { hour: number; minute: number }) => {
-    const mm = String(p.minute).padStart(2, '0')
-    return h24 ? { time: `${String(p.hour).padStart(2, '0')}:${mm}`, ap: '' } : { time: `${p.hour % 12 || 12}:${mm}`, ap: p.hour < 12 ? 'AM' : 'PM' }
-  }
-  const city = (c: (typeof CITIES)[number]) => {
-    const p = parts(instant, c.tz)
-    const rel = (p.offset - home.offset) / 60
-    const status = p.hour >= 22 || p.hour < 7 ? 'Asleep' : p.hour >= 9 && p.hour < 18 ? 'Working' : 'Free'
-    const gmt = p.offset / 60
-    const days = Math.round((p.day0 - home.day0) / 864e5)
-    return {
-      ...c,
-      ...hhmm(p),
-      hour: p.hour + p.minute / 60,
-      sub: c === HOME ? `GMT${money(gmt)}` : `${money(rel)} h`,
-      status,
-      day: days < 0 ? 'Yesterday' : days > 0 ? 'Tomorrow' : 'Today',
+  // --- 12 / 24 hour, remembered --------------------------------------------------------------------------------------
+  let h12 = $state(
+    (() => {
+      try {
+        const saved = localStorage.getItem('detent-tz-clock')
+        if (saved) return saved === '12'
+      } catch {
+        /* storage unavailable */
+      }
+      return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).resolvedOptions().hourCycle?.startsWith('h1') ?? false
+    })(),
+  )
+  function setClock(value: boolean) {
+    h12 = value
+    try {
+      localStorage.setItem('detent-tz-clock', value ? '12' : '24')
+    } catch {
+      /* storage unavailable */
     }
   }
-  const rows = $derived(shown.map(city))
 
-  // --- the sky, from the hour of day -------------------------------------------------
-  const STOPS: [number, [number, number, number]][] = [
-    [0, [11, 14, 40]], [5, [30, 28, 70]], [6.5, [226, 130, 130]], [9, [110, 175, 235]],
-    [15, [90, 165, 232]], [18, [232, 140, 96]], [19.5, [60, 40, 90]], [24, [11, 14, 40]],
-  ]
-  const sky = (h: number) => {
-    h = ((h % 24) + 24) % 24
-    const i = STOPS.findIndex(([t]) => t > h)
-    const [t0, a] = STOPS[i - 1]!
-    const [t1, b] = STOPS[i]!
-    const k = (h - t0) / (t1 - t0)
-    return `rgb(${a.map((v, j) => Math.round(v + (b[j]! - v) * k)).join(',')})`
-  }
-  const skyline = (name: string) => {
-    let s = [...name].reduce((n, c) => n + c.charCodeAt(0), 7)
-    return Array.from({ length: 7 }, (_, i) => ({ x: 3 + i * 4, h: 7 + ((s = (s * 31 + 11) % 97) % 12) }))
-  }
-  /** Sun by day, moon by night, each on an arc across the sky. */
-  const body = (h: number) => {
-    const day = h >= 6 && h < 18
-    const t = day ? (h - 6) / 12 : ((h + 6) % 24) / 12
-    return { day, x: 4 + t * 24, y: 22 - Math.sin(t * Math.PI) * 16 }
+  // --- derived: the instant, each city's wall clock ------------------------------------------------------------------
+  const dayStart = $derived(zonedDate(HOME.tz, init.y, init.m, init.d + dayShift, 0).getTime())
+  const at = $derived(zonedDate(HOME.tz, init.y, init.m, init.d + dayShift, 15 * quarter))
+  const home = $derived(zoneParts(HOME.tz, at))
+  const rows = $derived([{ ...HOME, ...home, me: true }, ...[...NEARBY, ...MORE].map((c) => ({ ...c, ...zoneParts(c.tz, at), me: false }))])
+  const atNow = $derived(dayShift === 0 && quarter === init.q)
+  const phase = $derived(moonPath(moonPhase(at.getTime())))
+  const dateLabel = $derived(at.toLocaleDateString('en-GB', { timeZone: HOME.tz, weekday: 'short', day: 'numeric', month: 'short' }))
+  const sunDay = $derived(dayStrip(dayStart, HOME))
+
+  const statusOf = (hour: number) => (hour >= 9 && hour < 18 ? 'Working' : hour >= 23 || hour < 7 ? 'Asleep' : 'Free')
+  const offsetLabel = (minutes: number) => {
+    if (!minutes) return 'Same time'
+    const h = Math.floor(Math.abs(minutes) / 60)
+    const m = Math.abs(minutes) % 60
+    return `${minutes > 0 ? '+' : '−'}${h}${m ? `:${String(m).padStart(2, '0')}` : ''} h`
   }
 
-  // The strip under the ruler shows the sky across the hours around the needle.
-  const strip = $derived(
-    `linear-gradient(90deg, transparent, ${[-4, -2, 0, 2, 4].map((d, i) => `${sky(home.hour + home.minute / 60 + d)} ${10 + i * 20}%`).join(',')}, transparent)`,
-  )
-  const dateLine = $derived(new Intl.DateTimeFormat('en-US', { timeZone: HOME.tz, weekday: 'short', day: 'numeric', month: 'short' }).format(instant).replace(/^(\w+),? (.*)$/, '$1 $2'))
-  const tickLabel = (i: number) => {
-    if (i % 12) return ''
-    const h = i / 4
-    return h24 ? String(h).padStart(2, '0') : `${h % 12 || 12}${h < 12 ? 'a' : 'p'}`
+  // --- the weather: hourly, for every city, cached for half an hour -------------------------------------------------
+  let weather = $state.raw<Weather[]>()
+  onMount(() => {
+    const KEY = 'detent-tz-weather'
+    try {
+      const cached = JSON.parse(sessionStorage.getItem(KEY) ?? 'null')
+      if (cached && Date.now() - cached.at < 18e5) {
+        weather = cached.w
+        return
+      }
+    } catch {
+      /* no cache */
+    }
+    const controller = new AbortController()
+    fetch(weatherUrl(CITIES), { signal: controller.signal })
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((data: { hourly: { time: number[]; weather_code: number[]; cloud_cover: number[]; precipitation: number[] } }[]) => {
+        const w = data.map(({ hourly }) => ({ t0: 1000 * hourly.time[0]!, code: hourly.weather_code, cloud: hourly.cloud_cover, rain: hourly.precipitation }))
+        weather = w
+        try {
+          sessionStorage.setItem(KEY, JSON.stringify({ at: Date.now(), w }))
+        } catch {
+          /* storage unavailable */
+        }
+      })
+      .catch(() => {
+        /* no weather: the skies are just the sun and moon */
+      })
+    return () => controller.abort()
+  })
+
+  // --- painting the skies: straight to the DOM, every frame --------------------------------------------------------
+  let root = $state<HTMLElement | null>(null)
+  let strip = $state<HTMLElement | null>(null)
+  let stripWidth = 0
+  function redraw() {
+    if (!root) return
+    const instant = dayStart + 36e5 * liveHour
+    // The first five skies always; the rest once the list is open.
+    for (const el of root.querySelectorAll<SVGElement>('.tz-sky')) {
+      const i = Number(el.dataset.w)
+      if (i < 5 || expanded) paintSky(el, instant, weather?.[i])
+    }
+    root.style.setProperty('--tz-tint', homeTint(instant))
+    if (strip) strip.style.backgroundPositionX = `${(stripWidth / 2 - 40 * liveHour).toFixed(2)}px`
+  }
+  // After every render, as the original does in a layout effect.
+  $effect(() => {
+    void [dayStart, expanded, weather, rows, phase, strip]
+    untrack(redraw)
+  })
+  onMount(() => {
+    if (!strip) return
+    const el = strip
+    stripWidth = el.clientWidth
+    const ro = new ResizeObserver(([entry]) => {
+      if (!entry) return
+      stripWidth = entry.contentRect.width
+      el.style.backgroundPositionX = `${(stripWidth / 2 - 40 * liveHour).toFixed(2)}px`
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  })
+
+  // --- the scrub -----------------------------------------------------------------------------------------------------
+  function onQuarter(q: number) {
+    const previous = lastQuarter
+    lastQuarter = q
+    // Wrapping past midnight moves to the next (or previous) day, unless "Now" made the jump.
+    if (!jumped) {
+      if (previous >= 72 && q < 24) dayShift++
+      else if (previous < 24 && q >= 72) dayShift--
+    }
+    const step = ((q - previous + 144) % 96) - 48
+    if (step) direction = step > 0 ? 'up' : 'down'
+  }
+  function goNow() {
+    jumped = quarter !== init.q
+    direction = dayShift > 0 || (dayShift === 0 && quarter > init.q) ? 'down' : 'up'
+    dayShift = 0
+    quarter = init.q
+  }
+  const tickLabel = (q: number) => (q % 12 ? '' : h12 ? `${(q / 4) % 12 || 12}${q < 48 ? 'a' : 'p'}` : String(q / 4).padStart(2, '0'))
+  const quarterLabel = (q: number) => {
+    const f = clockFace(`${String(Math.floor(q / 4)).padStart(2, '0')}:${String((q % 4) * 15).padStart(2, '0')}`, h12)
+    return f.half ? `${f.time} ${f.half}` : f.time
+  }
+
+  // --- the lens: a larger sky that follows the pointer over a city's sky -------------------------------------------
+  let lens = $state<HTMLElement | null>(null)
+  const hover = { x: 0, y: 0, sky: null as Element | null, raf: 0 }
+  function moveLens() {
+    hover.raf = 0
+    if (!lens || !hover.sky || !root) return
+    const sky = hover.sky.getBoundingClientRect()
+    const box = root.getBoundingClientRect()
+    const cx = sky.left + sky.width / 2
+    const cy = sky.top + sky.height / 2
+    // It leans toward the pointer: 35% of the way from the little sky's centre.
+    lens.style.translate = `${(cx + (hover.x - cx) * 0.35 - box.left).toFixed(1)}px ${(cy + (hover.y - cy) * 0.35 - box.top).toFixed(1)}px`
+    lens.setAttribute('data-on', '')
+  }
+  function onPointerMove(e: PointerEvent) {
+    if (!lens || !root || e.pointerType !== 'mouse') return
+    const sky = (e.target as Element).closest('.tz-sky')
+    if (!sky) {
+      hover.sky = null
+      lens.removeAttribute('data-on')
+      return
+    }
+    if (sky !== hover.sky) {
+      hover.sky = sky
+      lens.querySelector('use')!.setAttribute('href', `#${sky.id}`)
+      if (!lens.hasAttribute('data-on')) {
+        // Appearing: it grows out of the little sky, so start there without a slide.
+        const r = sky.getBoundingClientRect()
+        const box = root.getBoundingClientRect()
+        lens.style.transition = 'none'
+        lens.style.translate = `${(r.left + r.width / 2 - box.left).toFixed(1)}px ${(r.top + r.height / 2 - box.top).toFixed(1)}px`
+        void lens.offsetWidth
+        lens.style.transition = ''
+      }
+    }
+    hover.x = e.clientX
+    hover.y = e.clientY
+    hover.raf ||= requestAnimationFrame(moveLens)
+  }
+  function onPointerLeave() {
+    hover.sky = null
+    lens?.removeAttribute('data-on')
   }
 </script>
 
-<div class="tz">
-  <header class="head">
-    <div>
-      <div class="label">YOUR TIME · {HOME.name.toUpperCase()}</div>
-      <div class="date">{dateLine}</div>
-    </div>
-    <span class="note" aria-hidden="true">give it a slow drag
-      <svg width="26" height="36" viewBox="0 0 36 50" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 4c14 6 22 18 24 38" /><path d="M20 36l8 8 6-10" /></svg>
+{#snippet city(r: (typeof rows)[number], n: number)}
+  {@const state = statusOf(r.hour)}
+  {@const face = clockFace(r.time, h12)}
+  {@const day = r.date === home.date ? 'Today' : r.date > home.date ? 'Tomorrow' : 'Yesterday'}
+  {@const label = weatherAt(weather?.[n], at.getTime())?.label}
+  <li data-state={state} data-me={r.me ? '' : undefined}>
+    <TzSky city={CITIES[n]!} utcOffset={r.offset} {phase} {grain} index={n} />
+    <span class="tz-city">
+      <span class="tz-name">{r.name}{#if r.me}<span class="tz-you">You</span>{/if}</span>
+      <span class="tz-meta">{r.me ? r.gmt : offsetLabel(r.offset - home.offset)} · <DetentText rollDirection={direction} snapDuration={320} text={state} /></span>
     </span>
-    <div class="seg" role="group" aria-label="Clock format">
-      <button type="button" class:on={!h24} onclick={() => (h24 = false)}>12h</button>
-      <button type="button" class:on={h24} onclick={() => (h24 = true)}>24h</button>
-    </div>
-    {#if quarter !== nowQuarter}<button type="button" class="now" onclick={() => (quarter = nowQuarter)}>Now</button>{/if}
-  </header>
+    <span class="tz-when">
+      <span class="tz-clockface">
+        <DetentText class="tz-time" rollDirection={direction} snapDuration={320} text={face.time} />{#if face.half}<DetentText class="tz-half" rollDirection={direction} snapDuration={320} text={face.half} />{/if}
+      </span>
+      <DetentText class="tz-day" rollDirection={direction} snapDuration={320} text={day} />
+    </span>
+    <span class="tz-sr">{r.name}: {face.half ? `${face.time} ${face.half}` : face.time}, {day.toLowerCase()}, {state.toLowerCase()}{label ? `, ${label}` : ''}</span>
+  </li>
+{/snippet}
 
-  <div class="scrub">
+<div class="tz" bind:this={root}>
+  {@html `<style>${theme}${css}</style>`}
+  <!-- The film grain on every sky. -->
+  <svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <filter id={grain} x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB">
+      <feTurbulence type="fractalNoise" baseFrequency="1.15" numOctaves="2" seed="7" stitchTiles="stitch" />
+      <feColorMatrix type="saturate" values="0" />
+    </filter>
+  </svg>
+
+  <div class="tz-head">
+    <div>
+      <span class="tz-label">Your time · {HOME.name}</span>
+      <span class="tz-dateline">
+        <span class="tz-date"><DetentText rollDirection={direction} text={dateLabel} /></span>
+        <button type="button" class="tz-now" onclick={goNow} data-hidden={atNow ? '' : undefined} tabindex={atNow ? -1 : undefined} aria-hidden={atNow ? true : undefined}>
+          <svg viewBox="0 0 16 16" width="11" height="11" aria-hidden="true"><path d="M3 8a5 5 0 1 0 1.6-3.7M3 2.5v2.8h2.8" /></svg>Now
+        </button>
+      </span>
+    </div>
+    <div class="tz-clock" role="group" aria-label="Clock" data-h12={h12 ? '' : undefined}>
+      <span class="tz-clock-thumb" aria-hidden="true"></span>
+      <button type="button" aria-pressed={h12} onclick={() => setClock(true)}>12h</button>
+      <button type="button" aria-pressed={!h12} onclick={() => setClock(false)}>24h</button>
+    </div>
+  </div>
+
+  <div class="tz-scrub">
+    <span class="tz-needle" aria-hidden="true"></span>
+    <span class="tz-strip" bind:this={strip} aria-hidden="true" style:background-image={sunDay.strip}></span>
     <Detent
       items={QUARTERS}
       bind:value={quarter}
-      label="Your time"
+      onChange={onQuarter}
+      onSettle={() => (jumped = false)}
+      onScrollProgress={(rowsFromStart) => {
+        liveHour = (((rowsFromStart % 96) + 96) % 96) / 4
+        redraw()
+      }}
+      changeOn="tick"
+      onTick={tick}
       loop
+      getLabel={quarterLabel}
+      label="Your time"
       orientation="horizontal"
       itemHeight={10}
-      visibleCount={39}
+      visibleCount={33}
       height={52}
-      width="100%"
-      highlight={false}
-      magnify={false}
-      perspective={0}
+      curvature={0.3}
       fade={0.06}
       dim={0}
-      mask="none"
-      getLabel={(q) => `${String(Math.floor(q / 4)).padStart(2, '0')}:${String((q % 4) * 15).padStart(2, '0')}`}
+      magnify={false}
+      indicator={{ shape: 'none' }}
+      style="width:100%"
     >
       {#snippet item(q: number)}
-        <span class="tick" class:hour={q % 4 === 0}><span class="lbl">{tickLabel(q)}</span><i></i></span>
+        <span class="tz-tick" data-hour={q % 4 === 0 ? '' : undefined}>
+          <span>
+            {#if q === sunDay.sunrise}<svg class="tz-mark" viewBox="0 0 10 10" width="8" height="8" aria-hidden="true"><path d="M2.2 7a2.8 2.8 0 0 1 5.6 0M1 7h8M5 1.4v1.4M1.8 3.3l1 1M8.2 3.3l-1 1" /></svg>
+            {:else if q === sunDay.sunset}<svg class="tz-mark" viewBox="0 0 10 10" width="8" height="8" aria-hidden="true"><path d="M6.6 2.2a3.2 3.2 0 1 0 1.7 4.6 2.6 2.6 0 0 1-1.7-4.6Z" /></svg>{/if}{tickLabel(q)}
+          </span>
+          <i></i>
+        </span>
       {/snippet}
     </Detent>
-    <div class="needle"></div>
-    <div class="strip" style:background={strip}></div>
   </div>
 
-  <ul class="list">
-    {#each rows as r (r.name)}
-      <li class:home={r.name === HOME.name}>
-        <svg class="avatar" width="32" height="32" viewBox="0 0 32 32" aria-hidden="true">
-          <clipPath id="c-{r.name.replace(/\W/g, '')}"><circle cx="16" cy="16" r="15.5" /></clipPath>
-          <g clip-path="url(#c-{r.name.replace(/\W/g, '')})">
-            <rect width="32" height="32" fill={sky(r.hour)} />
-            {#if body(r.hour).day}
-              <circle cx={body(r.hour).x} cy={body(r.hour).y} r="3.4" fill="#fff6c8" />
-            {:else}
-              <circle cx={body(r.hour).x} cy={body(r.hour).y} r="3" fill="#e9eaf5" />
-            {/if}
-            {#each skyline(r.name) as b}<rect x={b.x} y={32 - b.h} width="3.2" height={b.h} fill="rgb(20 20 30 / 0.78)" />{/each}
-          </g>
-          <circle cx="16" cy="16" r="15.5" fill="none" stroke="rgb(0 0 0 / 0.12)" />
-        </svg>
-        <div class="who">
-          <b>{r.name}{#if r.name === HOME.name} <span class="you">YOU</span>{/if}</b>
-          <small>{r.sub} · <span class={r.status.toLowerCase()}>{r.status}</span></small>
-        </div>
-        <div class="when">
-          <span class="clock"><DetentText text={r.time} as="span" />{#if r.ap}<small class="ap">{r.ap}</small>{/if}</span>
-          <small>{r.day}</small>
-        </div>
-      </li>
-    {/each}
-  </ul>
-  <button type="button" class="more" onclick={() => (more = !more)}>{more ? 'View less −' : 'View more +'}</button>
-</div>
+  <div class="tz-lens" bind:this={lens} aria-hidden="true"><svg viewBox="0 0 32 32"><use /></svg></div>
 
-<style>
-  .tz { width: 100%; max-width: 486px; margin: 0 auto; padding: 18px 0 14px; font-size: 13px; }
-  .head { position: relative; display: flex; align-items: flex-start; justify-content: space-between; padding: 0 22px; }
-  .label { font-size: 11px; letter-spacing: 0.06em; color: #6b6b6b; }
-  .date { margin-top: 2px; font-size: 17px; font-weight: 600; }
-  .note { position: absolute; left: 200px; top: -2px; display: flex; flex-direction: column; font: 600 17px/1 'Caveat', 'Bradley Hand', 'Segoe Script', cursive; color: #d93025; transform: rotate(-4deg); }
-  .note svg { margin: 2px 0 0 78px; transform: scale(0.75); transform-origin: top left; }
-  .seg { display: flex; padding: 2px; border-radius: 999px; background: rgb(128 128 128 / 0.14); }
-  .seg button { border: 0; padding: 3px 10px; border-radius: 999px; background: none; font: inherit; color: #888; cursor: pointer; }
-  .seg button.on { background: #fff; color: #111; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
-  .now { position: absolute; left: 150px; margin-top: 0; top: 3px; border: 0; padding: 2px 10px; border-radius: 999px; background: rgb(0 0 0 / 0.06); font: inherit; cursor: pointer; }
-  .scrub { position: relative; margin: 8px 24px 0; font-size: 20px; }
-  .tick { position: relative; display: block; width: 10px; height: 52px; }
-  .tick .lbl { position: absolute; left: 50%; top: 4px; translate: -50% 0; font-size: 9.5px; color: #6b6b6b; white-space: nowrap; }
-  .tick i { position: absolute; left: 50%; bottom: 8px; translate: -50% 0; width: 1px; height: 5.7px; background: #0a0a0a; opacity: 0.28; }
-  .tick.hour i { width: 1.3px; height: 10.6px; opacity: 0.75; }
-  .needle { position: absolute; left: 50%; top: 20px; width: 2px; height: 35px; translate: -1px 0; background: #0a0a0a; border-radius: 1px; pointer-events: none; }
-  .strip { height: 4px; margin-top: -4px; border-radius: 4px; pointer-events: none; position: relative; }
-  .list { list-style: none; margin: 14px 22px 0; padding: 6px; border-radius: 20px; background: linear-gradient(rgb(128 128 128 / 0.1), rgb(128 128 128 / 0.07)); }
-  li { display: grid; grid-template-columns: 32px 1fr auto; gap: 12px; align-items: center; padding: 8px 8px; border-radius: 14px; }
-  li.home { background: rgb(210 120 120 / 0.1); }
-  .who { display: grid; gap: 1px; }
-  .who b { font-size: 15px; font-weight: 600; }
-  .you { display: inline-block; margin-left: 4px; padding: 1px 6px; border-radius: 5px; background: #0a0a0a; color: #fff; font-size: 10px; letter-spacing: 0.04em; }
-  small { color: #6b6b6b; font-size: 12px; }
-  .working { color: #2d8a4e; }
-  .when { display: grid; justify-items: end; gap: 1px; }
-  .clock { font: 600 17px ui-monospace, 'SF Mono', Menlo, monospace; display: inline-flex; align-items: baseline; gap: 3px; }
-  .ap { font: 600 9px ui-monospace, monospace; color: #444; }
-  .more { display: block; margin: 8px auto 0; border: 0; background: none; font: inherit; color: #555; cursor: pointer; }
-  @media (prefers-color-scheme: dark) {
-    .label, small, .tick .lbl { color: #999; } .seg button.on { background: #333; color: #fff; } .ap { color: #bbb; }
-    .tick i, .needle { background: #eee; } .you { background: #eee; color: #111; } .more { color: #aaa; }
-  }
-</style>
+  <div class="tz-list" onpointermove={onPointerMove} onpointerleave={onPointerLeave} role="presentation">
+    <ul aria-label="Cities">
+      {#each rows.slice(0, 5) as r, i (r.tz)}{@render city(r, i)}{/each}
+    </ul>
+    <div class="tz-more" data-open={expanded ? '' : undefined} inert={!expanded}>
+      <div>
+        <ul aria-label="More cities">
+          {#each rows.slice(5) as r, i (r.tz)}{@render city(r, i + 5)}{/each}
+        </ul>
+      </div>
+    </div>
+    <button type="button" class="tz-viewmore" aria-expanded={expanded} onclick={() => (expanded = !expanded)}>
+      <DetentText text={expanded ? 'View less' : 'View more'} />
+      <svg viewBox="0 0 12 12" width="11" height="11" aria-hidden="true"><path d="M2.5 6h7" /><path class="tz-plus" d="M6 2.5v7" /></svg>
+    </button>
+  </div>
+</div>

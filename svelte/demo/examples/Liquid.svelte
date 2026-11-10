@@ -1,267 +1,275 @@
 <script lang="ts">
-  // In your app: import { createDetent } from '@hayderkg/detent-svelte'
-  import { createDetent, type DetentFrame } from '../../src/lib'
+  // In your app: import { createDetent } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
+  import { onMount, untrack } from 'svelte'
+  import { createDetent } from '../../src/lib'
+  import { smoothstep } from '../site/FxCommon'
+  import FxDots from '../site/FxDots.svelte'
+  import { CARD_H, CARD_W, KANJI, PITCH, atlas, createGl, spriteUrls, type Gl } from '../site/FxLiquid'
 
   /**
-   * Liquid cards. Three renderers share one headless wheel:
-   *  - webgl: cards are painted to a 2D canvas and a fragment shader stretches them toward the edges, smears them
-   *    with speed and splits the colour channels at the outline;
-   *  - css: the real cards, stretched with transforms and an SVG blur / channel-split filter;
-   *  - off: plain cards.
+   * A WebGL shader driven by the wheel. The wheel reports its position and velocity every frame through `subscribe`:
+   * cards stretch toward the edges, smear with speed and split into color at the outline, then settle back.
+   * Three tiers: `webgl` (the shader), `css` (SVG filters and transforms) and `off`. It steps down on its own when the
+   * frame rate drops, or without WebGL2, and the effect is off with reduced motion.
    */
-  interface Card { id: string; label: string; kanji: string; romaji: string; color: string }
-  const cards: Card[] = [
-    { id: 'yama', label: 'Mountain', kanji: '山', romaji: 'YAMA', color: '#2f9e6f' },
-    { id: 'hana', label: 'Flower', kanji: '花', romaji: 'HANA', color: '#e8559a' },
-    { id: 'umi', label: 'Sea', kanji: '海', romaji: 'UMI', color: '#1fa0d8' },
-    { id: 'hi', label: 'Fire', kanji: '火', romaji: 'HI', color: '#f6b800' },
-    { id: 'hikari', label: 'Light', kanji: '光', romaji: 'HIKARI', color: '#ee5a33' },
-    { id: 'kaze', label: 'Wind', kanji: '風', romaji: 'KAZE', color: '#2540ff' },
-    { id: 'yuki', label: 'Snow', kanji: '雪', romaji: 'YUKI', color: '#9fb4c8' },
-    { id: 'tsuki', label: 'Moon', kanji: '月', romaji: 'TSUKI', color: '#6b4fd8' },
-  ]
-  const N = cards.length
-  const PITCH = 290
-  const W = 520
-  const H = 580
-  const CARD_W = 186
-  const CARD_H = 250
-  const mod = (n: number, m: number) => ((n % m) + m) % m
+  type Tier = 'webgl' | 'css' | 'off'
+  const corners = ['Throw', 'Coast', 'Catch', 'Settle']
+  const tiers: Tier[] = ['webgl', 'css', 'off']
 
-  let mode = $state<'webgl' | 'css' | 'off'>('webgl')
-  let phase = $state<'throw' | 'coast' | 'catch' | 'settle' | ''>('')
-  let index = $state(0)
+  let tier = $state<Tier>('webgl')
+  let note = $state('')
+  const degrade = (to: Tier, why: 'webgl' | 'fps') => {
+    tier = to
+    note = why === 'webgl' ? 'WebGL is unavailable here: CSS/SVG tier.' : to === 'css' ? 'Stepped down to the CSS/SVG tier to hold frame rate.' : 'Effect off to hold frame rate.'
+  }
+  onMount(() => {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      tier = 'off'
+      note = 'Reduced motion: effect off.'
+    } else if (!document.createElement('canvas').getContext('webgl2')) {
+      tier = 'css'
+      note = 'No WebGL2 here: CSS/SVG tier.'
+    }
+  })
 
-  const d = createDetent<Card>(() => ({
-    items: cards,
+  /** While a wheel moves, the page is told (`data-heavy` on the root), so it can calm other animations. */
+  const heavy = (on: boolean) => {
+    const root = document.documentElement
+    if (on !== root.hasAttribute('data-heavy')) root.toggleAttribute('data-heavy', on)
+  }
+
+  const d = createDetent<(typeof KANJI)[number]>(() => ({
+    onTick: ticks({ sound: true, haptics: true }),
+    items: KANJI,
     getKey: (c) => c.id,
     getLabel: (c) => c.label,
-    label: 'Cards',
-    loop: true,
     itemSize: PITCH,
-    visibleCount: 3,
-    overscan: 2,
-    onSettle: (_, i) => (index = i),
+    visibleCount: 2,
+    loop: true,
+    defaultValue: KANJI[0],
+    label: 'Cards',
   }))
 
-  let root = $state<HTMLElement | null>(null)
+  let sprites = $state<string[] | null>(null)
   let canvas = $state<HTMLCanvasElement | null>(null)
-  let blur = $state<SVGFEGaussianBlurElement | null>(null)
+  let track = $state<HTMLElement | null>(null)
+  let stage = $state<HTMLElement | null>(null)
+  let live: Gl | null = null // the shader pipeline, when there is one
+  let last = { offset: 0, v: 0 }
+  let visible = true
 
-  // ---- state labels: throw (finger moving it), coast, catch (grabbing a moving wheel), settle (spring) ----
-  let catchTimer = 0
+  // The cards as images, rendered once the page is idle: the CSS tier and the markup use them.
   $effect(() => {
-    const el = root
-    if (!el) return
-    const down = () => {
-      if (d.engine.mode === 'coast' || d.engine.mode === 'spring') {
-        phase = 'catch'
-        clearTimeout(catchTimer)
-        catchTimer = window.setTimeout(() => phase === 'catch' && (phase = ''), 450)
-      }
-    }
-    el.addEventListener('pointerdown', down, true)
-    return () => (el.removeEventListener('pointerdown', down, true), clearTimeout(catchTimer))
-  })
-  $effect(() =>
-    d.subscribe((f) => {
-      if (phase === 'catch' && f.mode !== 'drag') return
-      phase = f.mode === 'drag' ? 'throw' : f.mode === 'coast' ? 'coast' : f.mode === 'spring' ? 'settle' : ''
-    }),
-  )
-
-  // ---- webgl ----
-  const VERT = `attribute vec2 p; varying vec2 uv; void main(){ uv = p * .5 + .5; gl_Position = vec4(p, 0., 1.); }`
-  const FRAG = `precision mediump float;
-varying vec2 uv; uniform sampler2D scene; uniform float v; uniform vec2 px;
-vec4 at(vec2 c){ return texture2D(scene, c); }
-void main(){
-  float cy = uv.y - .5;
-  float e = pow(abs(cy) * 2., 2.);
-  // Stretch toward the edges: sample nearer the middle, and flare the sides out.
-  vec2 s = vec2(.5 + (uv.x - .5) * (1. - .42 * e), .5 + cy * (1. - .5 * e));
-  // Smear along the scroll axis, proportional to speed.
-  float smear = v * .016;
-  // Colour split: along the smear, and sideways toward the edges.
-  vec2 split = vec2(.006 * e, smear * .35 + .0009 * e);
-  vec4 sum = vec4(0.); float tw = 0.;
-  for (int i = 0; i < 9; i++) {
-    float t = float(i) / 8. - .5;
-    vec2 o = vec2(0., smear * t);
-    float r = at(s + o + split).r, g = at(s + o).g, b = at(s + o - split).b;
-    float a = at(s + o).a;
-    float w = 1. - abs(t) * .8;
-    sum += vec4(r, g, b, a) * w; tw += w;
-  }
-  gl_FragColor = sum / tw;
-}`
-
-  $effect(() => {
-    const cv = canvas
-    if (!cv || mode !== 'webgl') return
-    const gl = cv.getContext('webgl', { premultipliedAlpha: true, alpha: true })
-    if (!gl) return
-    const dpr = Math.min(2, window.devicePixelRatio || 1)
-    cv.width = W * dpr
-    cv.height = H * dpr
-    gl.viewport(0, 0, cv.width, cv.height)
-    const shader = (type: number, src: string) => {
-      const s = gl.createShader(type)!
-      gl.shaderSource(s, src)
-      gl.compileShader(s)
-      return s
-    }
-    const prog = gl.createProgram()!
-    gl.attachShader(prog, shader(gl.VERTEX_SHADER, VERT))
-    gl.attachShader(prog, shader(gl.FRAGMENT_SHADER, FRAG))
-    gl.linkProgram(prog)
-    gl.useProgram(prog)
-    const buf = gl.createBuffer()
-    gl.bindBuffer(gl.ARRAY_BUFFER, buf)
-    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW)
-    const loc = gl.getAttribLocation(prog, 'p')
-    gl.enableVertexAttribArray(loc)
-    gl.vertexAttribPointer(loc, 2, gl.FLOAT, false, 0, 0)
-    const tex = gl.createTexture()
-    gl.bindTexture(gl.TEXTURE_2D, tex)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE)
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE)
-    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true)
-    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, true)
-    const uV = gl.getUniformLocation(prog, 'v')
-    gl.clearColor(0, 0, 0, 0)
-
-    // The scene: stadium cards with a big kanji and two small captions, at the wheel's position.
-    const scene = document.createElement('canvas')
-    scene.width = W * dpr
-    scene.height = H * dpr
-    const g = scene.getContext('2d')!
-    g.scale(dpr, dpr)
-    const paint = (offset: number) => {
-      g.clearRect(0, 0, W, H)
-      const first = Math.floor(offset - 1.5) - 1
-      for (let j = first; j <= first + 5; j++) {
-        const c = cards[mod(j, N)]!
-        const cy = H / 2 + (j - offset) * PITCH
-        if (cy < -CARD_H || cy > H + CARD_H) continue
-        const x = (W - CARD_W) / 2
-        const y = cy - CARD_H / 2
-        g.fillStyle = c.color
-        g.beginPath()
-        g.roundRect(x, y, CARD_W, CARD_H, CARD_W / 2)
-        g.fill()
-        g.fillStyle = '#0a0a0a'
-        g.textAlign = 'center'
-        g.textBaseline = 'middle'
-        g.font = '900 128px "Hiragino Sans", "Noto Sans JP", "Yu Gothic", sans-serif'
-        g.fillText(c.kanji, W / 2, cy - 8)
-        g.font = '600 8px system-ui, sans-serif'
-        g.textAlign = 'left'
-        g.fillText(c.romaji, x + 30, cy + 74)
-        g.textAlign = 'right'
-        g.fillText(c.label.toUpperCase(), x + CARD_W - 30, cy + 74)
-      }
-    }
-    const draw = (f: Pick<DetentFrame, 'offset' | 'velocity'>) => {
-      paint(f.offset)
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, scene)
-      gl.uniform1f(uV, Math.max(-6, Math.min(6, f.velocity)))
-      gl.clear(gl.COLOR_BUFFER_BIT)
-      gl.drawArrays(gl.TRIANGLES, 0, 3)
-    }
-    const off = d.subscribe(draw)
-    draw({ offset: d.engine.x / PITCH, velocity: 0 })
+    let alive = true
+    let urls: string[] = []
+    const idle = window.requestIdleCallback ?? ((cb: () => void) => setTimeout(cb, 1))
+    idle(() => {
+      spriteUrls(Math.min(2, devicePixelRatio || 1)).then((made) => {
+        if (alive) sprites = urls = made
+        else made.forEach(URL.revokeObjectURL)
+      })
+    })
     return () => {
-      off()
-      gl.getExtension('WEBGL_lose_context')?.loseContext()
+      alive = false
+      urls.forEach(URL.revokeObjectURL)
     }
   })
 
-  // ---- css: stretch with the distance and smear with speed through an SVG filter ----
-  const cssRow = (offset: number) => {
-    const a = Math.min(1.5, Math.abs(offset))
-    return { transform: `scale(${1 + 0.12 * a}, ${1 + 0.5 * a * a})`, transformOrigin: offset < 0 ? '50% 100%' : '50% 0%' }
-  }
+  // The shader tier.
   $effect(() => {
-    if (mode !== 'css') return
-    return d.subscribe((f) => blur?.setAttribute('stdDeviation', `0 ${Math.min(10, Math.abs(f.velocity) * 2.2).toFixed(2)}`))
+    if (tier !== 'webgl' || !canvas) return
+    const cv = canvas
+    let alive = true
+    let gl: Gl | null = null
+    const build = () => {
+      try {
+        const dpr = Math.min(2, devicePixelRatio || 1)
+        return createGl(cv, atlas(dpr), dpr, KANJI.length)
+      } catch {
+        return null
+      }
+    }
+    const ro = new ResizeObserver(() => gl && (gl.resize(), gl.draw(last.offset, last.v)))
+    Promise.resolve().then(() => {
+      if (!alive) return
+      gl = live = build()
+      if (!gl) return degrade('css', 'webgl')
+      gl.draw(last.offset, 0)
+      ro.observe(cv)
+    })
+    const lost = (e: Event) => (e.preventDefault(), (live = null))
+    const restored = () => {
+      gl = live = build()
+      gl?.draw(last.offset, 0)
+      if (!live) degrade('css', 'webgl')
+    }
+    cv.addEventListener('webglcontextlost', lost)
+    cv.addEventListener('webglcontextrestored', restored)
+    return () => {
+      cv.removeEventListener('webglcontextlost', lost)
+      cv.removeEventListener('webglcontextrestored', restored)
+      alive = false
+      ro.disconnect()
+      gl?.destroy()
+      live = null
+    }
   })
-  const rowFor = (offset: number) => {
-    if (mode !== 'css') return ''
-    const s = cssRow(offset)
-    return `transform:${s.transform};transform-origin:${s.transformOrigin};filter:url(#liquid-css)`
+
+  /** One frame: the shader's uniforms, or (CSS tier) a stretch per card and a blur and split by speed on the track. */
+  function frame(offset: number, v: number) {
+    last = { offset, v }
+    if (!visible) return
+    if (tier === 'webgl') return live?.draw(offset, v)
+    const t = track
+    if (!t) return
+    const speed = Math.min(1, Math.abs(v) / 2.5)
+    const level = tier === 'css' ? Math.round(5 * speed) : 0
+    const filter = level ? `url(#lq${level})` : ''
+    if (t.style.filter !== filter) t.style.filter = filter
+    for (const row of Array.from(t.children) as HTMLElement[]) {
+      const card = row.firstElementChild as HTMLElement | null
+      if (!card || row.dataset.detentIndex === undefined) continue
+      if (tier === 'off') {
+        card.style.transform = ''
+        continue
+      }
+      const away = Number(row.dataset.detentIndex) - offset
+      const e = smoothstep(0.3, 1.05, Math.abs(away))
+      const stretch = 1.5 * e * e * 0.5 + 0.35 * speed * (0.3 + 0.7 * e)
+      card.style.transformOrigin = away < 0 ? '50% 100%' : '50% 0%'
+      card.style.transform = `scale(${1 + 0.4 * e}, ${1 + stretch})`
+    }
   }
+  // Switching tier, new rows, or the card images arriving (they replace the placeholders): bring the cards to the right look at once.
+  $effect(() => {
+    void [tier, sprites, d.rows]
+    untrack(() => frame(last.offset, 0))
+  })
+
+  // Only while the stage is on screen.
+  $effect(() => {
+    const el = stage
+    if (!el) return
+    const io = new IntersectionObserver(([e]) => {
+      visible = !!e?.isIntersecting
+      if (visible) frame(last.offset, 0)
+      else heavy(false)
+    })
+    io.observe(el)
+    return () => (io.disconnect(), heavy(false))
+  })
+
+  // The wheel's frames, and a frame-rate watchdog: 30 frame times at a time while it moves; two slow windows in a row
+  // (median over 22 ms) step the effect down a tier.
+  $effect(() => {
+    let raf = 0
+    let prev = 0
+    let skip = 0
+    let slow = 0
+    let times: number[] = []
+    const measure = (now: number) => {
+      raf = 0
+      if (prev && ++skip > 8) times.push(now - prev)
+      prev = now
+      if (times.length >= 30) {
+        slow = times.sort((a, b) => a - b)[15]! > 22 ? slow + 1 : 0
+        times = []
+        if (slow >= 2 && tier !== 'off') return degrade(tier === 'webgl' ? 'css' : 'off', 'fps')
+      }
+      raf = requestAnimationFrame(measure)
+    }
+    const stop = d.subscribe((f) => {
+      heavy(f.mode !== 'idle' && visible && tier !== 'off')
+      frame(f.offset, f.mode === 'idle' ? 0 : f.velocity)
+      if (f.mode !== 'idle' && !raf && !document.hidden) {
+        prev = skip = 0
+        raf = requestAnimationFrame(measure)
+      }
+      if (f.mode === 'idle' && raf) {
+        cancelAnimationFrame(raf)
+        raf = 0
+      }
+    })
+    return () => (stop(), cancelAnimationFrame(raf))
+  })
 </script>
 
-<div class="liquid" class:webgl={mode === 'webgl'}>
-  <svg width="0" height="0" aria-hidden="true" style="position:absolute">
-    <filter id="liquid-css" x="-10%" y="-40%" width="120%" height="180%" color-interpolation-filters="sRGB">
-      <feGaussianBlur bind:this={blur} in="SourceGraphic" stdDeviation="0 0" />
-    </filter>
-  </svg>
-  <span class="corner tl" class:on={phase === 'throw'}>Throw</span>
-  <span class="corner tr" class:on={phase === 'coast'}>Coast</span>
-  <span class="corner bl" class:on={phase === 'catch'}>Catch</span>
-  <span class="corner br" class:on={phase === 'settle'}>Settle</span>
-
-  <div class="stage" {...d.rootAttrs} style={d.rootStyle + 'height:580px;touch-action:pan-x'} bind:this={root} {@attach d.attachRoot}>
-    <div {...d.trackAttrs} style={d.trackStyle} {@attach d.attachTrack}>
-      {#each d.rows as r (r.key)}
-        <div {...r.attrs} style={r.style} class="row">
-          <div
-            class="card"
-            class:hidden={mode === 'webgl'}
-            role="img"
-            aria-label={r.item.label}
-            style="background:{r.item.color};{rowFor(r.offset)}"
-          >
-            <b>{r.item.kanji}</b>
-            <span>{r.item.romaji}</span><span>{r.item.label.toUpperCase()}</span>
+<div class="liquid-stage">
+  <div class="liquid" data-tier={tier} bind:this={stage}>
+    <!-- CSS tier: a blur along the scroll axis, with the red and blue channels pulled apart by a fraction of it. -->
+    <svg width="0" height="0" aria-hidden="true" style="position:absolute">
+      {#each [1, 2, 3, 4, 5] as n (n)}
+        <filter id="lq{n}" x="-10%" y="-40%" width="120%" height="180%" color-interpolation-filters="sRGB">
+          <feGaussianBlur in="SourceGraphic" stdDeviation="0 {n}" result="b" />
+          <feColorMatrix in="b" values="1 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 1 0" result="r" />
+          <feOffset in="r" dy={-(0.5 * n)} result="ro" />
+          <feColorMatrix in="b" values="0 0 0 0 0 0 1 0 0 0 0 0 0 0 0 0 0 0 1 0" result="g" />
+          <feColorMatrix in="b" values="0 0 0 0 0 0 0 0 0 0 0 0 1 0 0 0 0 0 1 0" result="bl" />
+          <feOffset in="bl" dy={0.5 * n} result="bo" />
+          <feBlend in="ro" in2="g" mode="screen" result="rg" />
+          <feBlend in="rg" in2="bo" mode="screen" />
+        </filter>
+      {/each}
+    </svg>
+    {#each ['tl', 'tr', 'bl', 'br'] as pos, i (pos)}
+      <span class="corner {pos}" aria-hidden="true">{corners[i]}</span>
+    {/each}
+    <div {...d.rootAttrs} class="root" style="{d.rootStyle}width:100%" {@attach d.attachRoot}>
+      <div {...d.trackAttrs} style={d.trackStyle} bind:this={track} {@attach d.attachTrack}>
+        {#each d.rows as r (r.key)}
+          <div {...r.attrs} class="row" style={r.style}>
+            {#if sprites}
+              <img src={sprites[r.index]} alt={r.item.label} width={CARD_W} height={CARD_H} decoding="async" draggable="false" class="card" />
+            {:else}
+              <div class="card" role="img" aria-label={r.item.label}></div>
+            {/if}
           </div>
-        </div>
+        {/each}
+      </div>
+      <canvas bind:this={canvas} class="gl" aria-hidden="true" hidden={tier !== 'webgl'}></canvas>
+    </div>
+    <FxDots count={KANJI.length} index={d.selectedIndex} variant="liquid" />
+    <div {...d.liveRegionAttrs} style={d.liveRegionStyle}>{d.announcement}</div>
+  </div>
+  <div class="controls">
+    <div class="seg" role="group" aria-label="Liquid tier">
+      {#each tiers as t (t)}
+        <button type="button" aria-pressed={t === tier} onclick={() => ((tier = t), (note = ''))}>{t}</button>
       {/each}
     </div>
-    {#if mode === 'webgl'}<canvas bind:this={canvas} class="gl" aria-hidden="true"></canvas>{/if}
+    <p class="note" aria-live="polite">{note}</p>
   </div>
-
-  <div class="dots" aria-hidden="true">
-    {#each cards as c, i (c.id)}<i class:on={i === index}></i>{/each}
-  </div>
-  <div class="live" {...d.liveRegionAttrs} style={d.liveRegionStyle}>{d.announcement}</div>
-</div>
-
-<div class="modes">
-  {#each ['webgl', 'css', 'off'] as m (m)}
-    <button type="button" class:on={mode === m} onclick={() => (mode = m as typeof mode)}>{m}</button>
-  {/each}
 </div>
 
 <style>
-  .liquid { position: relative; width: 520px; max-width: 100%; height: 580px; margin: 0 auto; border: 1px solid #e5e5e5; border-radius: 16px; overflow: hidden; background: #fff; font-family: system-ui, sans-serif; }
-  .stage { width: 100%; cursor: grab; outline: none; }
-  .stage:active { cursor: grabbing; }
-  .row { display: grid; place-items: center; }
-  .card { position: relative; width: 186px; height: 250px; border-radius: 93px; display: grid; place-items: center; color: #0a0a0a; box-sizing: border-box; }
-  .card.hidden { visibility: hidden; }
-  .card b { font: 900 128px/1 'Hiragino Sans', 'Noto Sans JP', 'Yu Gothic', sans-serif; transform: translateY(-8px); }
-  .card span { position: absolute; bottom: 52px; font: 600 8px/1 system-ui, sans-serif; letter-spacing: 0.04em; }
-  .card span:nth-of-type(1) { left: 30px; }
-  .card span:nth-of-type(2) { right: 30px; }
-  .gl { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  .corner { position: absolute; z-index: 2; font: 700 11px/1 system-ui, sans-serif; letter-spacing: 0.18em; text-transform: uppercase; color: #0a0a0a; opacity: 0.45; transition: opacity 0.15s; pointer-events: none; }
-  .corner.on { opacity: 1; }
-  .tl { top: 22px; left: 22px; } .tr { top: 22px; right: 22px; } .bl { bottom: 22px; left: 22px; } .br { bottom: 22px; right: 22px; }
-  .dots { position: absolute; z-index: 3; right: 14px; top: 50%; transform: translateY(-50%); display: grid; gap: 6px; justify-items: center; padding: 8px 5px; border-radius: 99px; background: rgb(255 255 255 / 0.72); box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.08); pointer-events: none; }
-  .dots i { width: 5px; height: 5px; border-radius: 99px; background: #c4c4c4; transition: height 0.2s, background 0.2s; }
-  .dots i.on { height: 15px; background: #222; }
-  .modes { display: flex; gap: 14px; justify-content: center; margin-top: 12px; font: 12.5px ui-monospace, monospace; }
-  .modes button { border: 0; background: none; padding: 0; font: inherit; color: #888; cursor: pointer; }
-  .modes button.on { color: #111; font-weight: 700; }
+  .liquid-stage { --bg: #fff; --fg: #0a0a0a; --muted: #6b6b6b; --faint: #737373; --line: #00000014; --ring: #00000073;
+    color-scheme: light; color: #0a0a0a; background: #fff; border-radius: 16px; justify-items: stretch; gap: 12px; padding: 0 0 14px; display: grid; overflow: hidden; box-shadow: inset 0 0 0 0.5px #0000001a;
+    width: 100%; font-family: Geist, system-ui, sans-serif; }
+  .liquid { width: 100%; position: relative; min-height: 580px; }
+  .corner { z-index: 2; font: 600 11px/1 Geist, system-ui, sans-serif; letter-spacing: 0.22em; text-transform: uppercase; color: #0a0a0a; pointer-events: none; position: absolute; }
+  .corner.tl { top: 22px; left: 22px; } .corner.tr { top: 22px; right: 22px; } .corner.bl { bottom: 22px; left: 22px; } .corner.br { bottom: 22px; right: 22px; }
+  .root { cursor: grab; outline: none; }
+  .root:focus-visible { box-shadow: inset 0 0 0 1.5px #00000073; }
+  .root[data-dragging] { cursor: grabbing; }
+  .row { place-items: center; display: grid; }
+  .card { will-change: transform; border-radius: 93px; width: 186px; height: 250px; display: block; }
+  .liquid[data-tier='webgl'] .card { opacity: 0; }
+  .gl { pointer-events: none; width: 100%; height: 100%; position: absolute; inset: 0; }
+
+  .controls { justify-items: center; gap: 6px; display: grid; }
+  .seg { flex-wrap: wrap; justify-content: flex-end; align-items: baseline; gap: 2px 14px; display: inline-flex; position: relative; }
+  .seg button { font-family: 'Geist Mono', ui-monospace, monospace; color: var(--faint); cursor: pointer; -webkit-tap-highlight-color: transparent; background: 0 0; border: 0; padding: 2px 0; font-size: 12.5px; line-height: 18px; transition: color 0.15s; }
+  .seg button[aria-pressed='true'] { color: var(--fg); font-weight: 600; }
+  .seg button:focus-visible { outline: 1.5px solid var(--ring); outline-offset: 2px; border-radius: 4px; }
+  @media (hover: hover) and (pointer: fine) { .seg button:hover:not([aria-pressed='true']) { color: var(--fg); } }
+  .note { color: #6b6b6b; min-height: 20px; margin: 0; font: 12.5px 'Geist Mono', ui-monospace, monospace; }
+  .note:empty { display: none; }
+
   @media (prefers-color-scheme: dark) {
-    .liquid { background: #0a0a0a; border-color: #2a2a2a; } .corner { color: #ededed; }
-    .dots { background: rgb(20 20 20 / 0.6); } .dots i { background: #555; } .dots i.on { background: #eee; }
-    .modes button.on { color: #eee; }
+    .liquid-stage { --bg: #0b0b0c; --fg: #ededed; --muted: #9a9a9a; --faint: #8a8a8a; --line: #ffffff1a; --ring: #ffffff80; color-scheme: dark; color: #ededed; background: #0b0b0c; box-shadow: inset 0 0 0 0.5px #ffffff14; }
+    .corner { color: #ededed; }
+    .note { color: #9a9a9a; }
+    .root:focus-visible { box-shadow: inset 0 0 0 1.5px #ffffff80; }
   }
 </style>

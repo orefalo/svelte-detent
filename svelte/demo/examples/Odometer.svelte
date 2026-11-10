@@ -1,66 +1,76 @@
 <script lang="ts">
-  // In your app: import { Detent } from '@hayderkg/detent-svelte'
-  import { Detent } from '../../src/lib'
+  // In your app: import { Detent } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
   import { onMount } from 'svelte'
+  import { Detent } from '../../src/lib'
+
+  /** Replace `base` with wherever you host the logo. */
+  let { base = 'https://detent.hayder.sh' }: { base?: string } = $props()
 
   const digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9']
-  let count = $state(987_634)
+  const tick = ticks({ sound: true, haptics: true })
+  let count = $state(987_058)
+  let root = $state<HTMLElement | null>(null)
+  let visible = $state(false)
 
-  // A live number: a new random value every 3 seconds (6 digits at most, below 1,000,000).
+  // A live number: a new random value every 3 seconds (6 digits at most), only while the counter is on screen.
   onMount(() => {
+    let inView = false
+    const update = () => (visible = inView && !document.hidden)
+    const io = new IntersectionObserver(([e]) => ((inView = !!e?.isIntersecting), update()))
+    if (root) io.observe(root)
+    document.addEventListener('visibilitychange', update)
+    return () => (io.disconnect(), document.removeEventListener('visibilitychange', update))
+  })
+  $effect(() => {
+    if (!visible) return
     const id = setInterval(() => (count = Math.floor(Math.random() * 1_000_000)), 3000)
     return () => clearInterval(id)
   })
 
-  /** The number as a row of places, keyed from the right so a digit keeps its wheel when the number grows. */
-  const places = $derived.by(() => {
-    const text = count.toLocaleString('en-US')
-    return Array.from(text).map((ch, i) => ({ ch, key: text.length - i, digit: ch >= '0' && ch <= '9' }))
-  })
-  const label = (key: number) => `Digit ${key}`
+  const text = $derived(String(count))
 </script>
 
-<div class="odometer">
-  <p class="caption">
-    <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true"><path d="M8 1.5 14.5 8 8 14.5 1.5 8Z" fill="none" stroke="#7c6cf0" stroke-width="1.6" stroke-linejoin="round" /></svg>
-    Transactions on Monad
-  </p>
-  <div class="counter" role="img" aria-label={count.toLocaleString('en-US')}>
-    {#each places as p (p.key)}
-      {#if p.digit}
-        <span class="wheel" aria-hidden="true">
-          <Detent
-            items={digits}
-            value={p.ch}
-            label={label(p.key)}
-            loop
-            disabled
-            itemHeight={46}
-            visibleCount={1}
-            width={26}
-            highlight={false}
-            magnify={false}
-            perspective={0}
-            fade={0}
-            dim={0}
-            mask="none"
-            motionBlur
-            style="--detent-font-size:34px;font-weight:600;cursor:default"
-          />
-        </span>
-      {:else}
-        <span class="comma" aria-hidden="true">{p.ch}</span>
-      {/if}
+<div class="odo" bind:this={root} data-active={visible}>
+  <span class="caption"><img src="{base}/tokens/monad-mark.svg" alt="" width="16" height="16" />Transactions on Monad</span>
+  <div class="counter" aria-label={count.toLocaleString('en')} role="img">
+    <!-- Keyed by place from the right, so a digit keeps its wheel when the number grows or shrinks. -->
+    {#each [...text] as ch, r (text.length - r)}
+      {@const place = text.length - r}
+      <span class="digit">
+        {#if r > 0 && place % 3 === 0}<span class="comma">,</span>{/if}
+        <Detent
+          onTick={tick}
+          items={digits}
+          value={ch}
+          loop
+          disabled
+          label="Digit {r + 1}"
+          itemHeight={46}
+          visibleCount={1}
+          width={26}
+          perspective={0}
+          indicator={{ shape: 'none' }}
+          magnify={false}
+          mask="none"
+          fade={0}
+          dim={0}
+          preset="snappy"
+          motionBlur={2.5}
+          style="font-weight:600;font-variant-numeric:tabular-nums;cursor:default"
+        />
+      </span>
     {/each}
   </div>
   <button type="button" onclick={() => (count += 1000)}>+1,000</button>
 </div>
 
 <style>
-  .odometer { display: grid; justify-items: center; gap: 14px; }
-  .caption { display: flex; align-items: center; gap: 7px; margin: 0; font: 13.5px system-ui, sans-serif; opacity: 0.8; }
-  .counter { display: flex; align-items: center; padding: 6px 10px; border-radius: 14px; background: rgb(128 128 128 / 0.1); }
-  .wheel { display: flex; align-items: center; height: 46px; }
-  .comma { font: 600 22px system-ui, sans-serif; opacity: 0.5; padding: 0 1px; align-self: flex-end; line-height: 38px; }
-  button { padding: 6px 14px; border: 1px solid rgb(128 128 128 / 0.35); border-radius: 999px; background: none; color: inherit; font: 13px system-ui, sans-serif; cursor: pointer; }
+  .odo { display: grid; justify-items: center; gap: 14px; }
+  .caption { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; opacity: 0.7; }
+  .counter { display: flex; align-items: center; padding: 6px 10px; border-radius: 14px; background: rgb(128 128 128 / 0.1); --detent-font-size: 34px; }
+  .digit { display: flex; align-items: center; animation: odo-in 360ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .comma { font-size: 28px; opacity: 0.4; margin: 0 1px; }
+  button { height: 30px; padding: 0 14px; border-radius: 99px; border: 1px solid rgb(128 128 128 / 0.3); background: transparent; font: inherit; font-size: 13px; color: inherit; cursor: pointer; }
+  @keyframes odo-in { from { opacity: 0; transform: translateX(-6px); } }
 </style>

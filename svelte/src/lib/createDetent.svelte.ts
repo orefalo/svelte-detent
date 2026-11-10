@@ -5,6 +5,16 @@ import type { Attrs, DetentApi, DetentFrame, DetentOptions, DetentRow, DetentSlo
 
 const fmt = (n: number) => String(Math.round(n * 1e4) / 1e4)
 
+/** Writes a row's CSS variables straight to its element (no arrays or objects: this runs for every row, every frame). */
+export function writeRowVars(el: HTMLElement, off: number, visible: number) {
+  const abs = Math.abs(off)
+  const st = el.style
+  st.setProperty('--offset', fmt(off))
+  st.setProperty('--abs-offset', fmt(abs))
+  st.setProperty('--progress', fmt(Math.max(0, 1 - abs / (visible / 2))))
+  st.setProperty('--selected', abs < 0.5 ? '1' : '0')
+}
+
 /** The CSS variables of a row at distance `off` from the center. */
 export const rowVars = (off: number, visible: number): [string, string][] => {
   const abs = Math.abs(off)
@@ -119,8 +129,12 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
     const d = S.base - x
     return S.vertical ? `translate3d(0,${d}px,0)` : `translate3d(${rtl ? -d : d}px,0,0)`
   }
-  const publish = (velocity: number) =>
-    subs.forEach((fn) => fn({ offset: engine.x / size, velocity, mode: engine.mode, target: engine.target, from: engine.from }))
+  const publish = (velocity: number) => {
+    if (!subs.size) return
+    // One frame object for every subscriber, not one each.
+    const frame: DetentFrame = { offset: engine.x / size, velocity, mode: engine.mode, target: engine.target, from: engine.from }
+    subs.forEach((fn) => fn(frame))
+  }
 
   function emit(i: number) {
     if (i !== emitted) o.onChange?.(o.items[(emitted = i)] as T, i)
@@ -135,7 +149,7 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
     for (const r of track.children as unknown as HTMLElement[]) {
       const j = r.dataset.detentIndex
       if (!j) continue
-      for (const [k, val] of rowVars(+j - c, visible)) r.style.setProperty(k, val)
+      writeRowVars(r, +j - c, visible)
       // Interactive rows: only the centered one takes focus and input. Off again: nothing stays inert.
       const inert = interactive && Math.abs(+j - c) >= 0.5
       if (r.inert !== inert) r.inert = inert
@@ -316,7 +330,10 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
         'aria-selected': role === 'option' ? j === rest : undefined,
         ...extra,
       },
-      style: cssText({ ...box(j), ...Object.fromEntries(rowVars(j - now, visible)) }),
+      // Built when read: the styled component sets its own row styles and never reads this one.
+      get style() {
+        return cssText({ ...box(j), ...Object.fromEntries(rowVars(j - now, visible)) })
+      },
     })
     // The rendered window follows the motion; the row the listbox references (aria-activedescendant: the resting
     // one) is always rendered too, even when the wheel has moved far from it, so it always exists.
@@ -333,14 +350,16 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
       const disabled = !enabled(S, j)
       // Name options from getLabel: rich or inert (interactive) content may not name them otherwise.
       const named: Attrs = o.getLabel || o.interactive ? { 'aria-label': label(S, index) } : {}
-      rows.push({
-        ...slot(j, 'option', disabled ? { ...named, 'aria-disabled': true, 'data-disabled': '' } : named),
-        item: o.items[index] as T,
-        index,
-        // Duplicate item keys must not become duplicate keyed-each keys (that is an error in Svelte).
-        key: ((k: Key) => (used.has(k) ? `${k}#${j}` : (used.add(k), k)))(S.loop ? `${S.keys[index]}:${Math.floor(j / n)}` : (S.keys[index] as Key)),
-        disabled,
-      })
+      // Object.assign, not a spread: a spread would read the lazy `style` getter for every row.
+      rows.push(
+        Object.assign(slot(j, 'option', disabled ? { ...named, 'aria-disabled': true, 'data-disabled': '' } : named), {
+          item: o.items[index] as T,
+          index,
+          // Duplicate item keys must not become duplicate keyed-each keys (that is an error in Svelte).
+          key: ((k: Key) => (used.has(k) ? `${k}#${j}` : (used.add(k), k)))(S.loop ? `${S.keys[index]}:${Math.floor(j / n)}` : (S.keys[index] as Key)),
+          disabled,
+        }),
+      )
     }
     const selectedIndex = n ? Math.min(n - 1, sel) : -1
     const rootAttrs: Attrs = {

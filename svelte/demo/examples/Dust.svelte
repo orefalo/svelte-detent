@@ -1,145 +1,163 @@
 <script lang="ts">
-  // In your app: import { createDetent } from '@hayderkg/detent-svelte'
-  import { createDetent, type DetentFrame } from '../../src/lib'
+  // In your app: import { createDetent } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
+  import { createDetent } from '../../src/lib'
+  import FxDots from '../site/FxDots.svelte'
+  import { clamp01, isDark, mod, onTheme, smooth, watchCanvas } from '../site/FxCommon'
 
   /**
-   * Words made of particles. Each word is rendered once to an offscreen canvas and sampled into points; between two
+   * Words made of particles. Each word is drawn once to an offscreen canvas and sampled into 2,200 points; between two
    * words every particle flies from its point in one to its point in the other, on its own delay and arc. A fast throw
-   * widens the arcs, so the words scatter.
+   * widens the arcs, so the words scatter. The wheel reports its position and velocity every frame through `subscribe`.
    */
-  const words = ['Drift', 'Ember', 'Bloom', 'Tide', 'Flare', 'Hush']
-  const N = words.length
-  const W = 520
-  const H = 380
-  const PARTICLES = 3200
-  const SHADES = ['#0a3d8f', '#1b66cc', '#4f93e8', '#0b2a63']
-  const mod = (n: number, m: number) => ((n % m) + m) % m
+  const words = [
+    { text: 'Drift', hue: 205 },
+    { text: 'Ember', hue: 18 },
+    { text: 'Bloom', hue: 330 },
+    { text: 'Tide', hue: 175 },
+    { text: 'Flare', hue: 42 },
+    { text: 'Hush', hue: 262 },
+  ]
+  const N = 2200
+  const PITCH = 120
 
-  let index = $state(0)
-  const d = createDetent<string>(() => ({
+  const d = createDetent<(typeof words)[number]>(() => ({
+    onTick: ticks({ sound: true, haptics: true }),
     items: words,
-    label: 'Words',
-    loop: true,
+    getKey: (w) => w.text,
+    getLabel: (w) => w.text,
     orientation: 'horizontal',
-    itemSize: 260,
-    visibleCount: 3,
-    onSettle: (_, i) => (index = i),
+    itemSize: PITCH,
+    visibleCount: 5,
+    loop: true,
+    label: 'Words',
   }))
 
   let canvas = $state<HTMLCanvasElement | null>(null)
 
-  /** Per-particle randoms, shared by every word so a particle keeps its character from word to word. */
-  const rand = (() => {
-    let s = 7
-    const next = () => ((s = (s * 16807) % 2147483647) / 2147483647)
-    return { next }
-  })()
-  const delay = Float32Array.from({ length: PARTICLES }, () => rand.next() * 0.45)
-  const angle = Float32Array.from({ length: PARTICLES }, () => rand.next() * Math.PI * 2)
-  const reach = Float32Array.from({ length: PARTICLES }, () => 0.35 + rand.next() * 0.9)
-  const shade = Uint8Array.from({ length: PARTICLES }, () => Math.floor(rand.next() * SHADES.length))
-  const size = Float32Array.from({ length: PARTICLES }, () => 1 + rand.next() * 1.1)
-
-  /** The points of each word: sampled from its rendered glyphs, then dealt out to PARTICLES particles. */
-  function sample(word: string): Float32Array {
-    const c = document.createElement('canvas')
-    c.width = W
-    c.height = H
-    const g = c.getContext('2d', { willReadFrequently: true })!
-    g.fillStyle = '#000'
-    g.textAlign = 'center'
-    g.textBaseline = 'middle'
-    g.font = '700 118px system-ui, "Helvetica Neue", Arial, sans-serif'
-    g.fillText(word, W / 2, H / 2 - 12)
-    const data = g.getImageData(0, 0, W, H).data
-    const pts: number[] = []
-    for (let y = 0; y < H; y += 2) for (let x = 0; x < W; x += 2) if (data[(y * W + x) * 4 + 3]! > 128) pts.push(x, y)
-    const count = pts.length / 2
-    const out = new Float32Array(PARTICLES * 2)
-    for (let k = 0; k < PARTICLES; k++) {
-      // A shuffled stride keeps neighbours in the word from sharing a delay.
-      const p = Math.floor(((k * 2654435761) >>> 0) % Math.max(1, count))
-      out[k * 2] = (pts[p * 2] ?? W / 2) + (rand.next() - 0.5) * 2
-      out[k * 2 + 1] = (pts[p * 2 + 1] ?? H / 2) + (rand.next() - 0.5) * 2
-    }
-    return out
-  }
-
   $effect(() => {
     const cv = canvas
     if (!cv) return
-    const dpr = Math.min(2, window.devicePixelRatio || 1)
-    cv.width = W * dpr
-    cv.height = H * dpr
-    const g = cv.getContext('2d')!
-    let targets: Float32Array[] = []
-    const ease = (t: number) => t * t * (3 - 2 * t)
-    let last: Pick<DetentFrame, 'offset' | 'velocity'> = { offset: d.engine.x / 260, velocity: 0 }
+    const ctx = cv.getContext('2d')!
+    // Per-particle randoms, shared by every word so a particle keeps its character from word to word.
+    const delay = Float32Array.from({ length: N }, () => 0.35 * Math.random())
+    const angle = Float32Array.from({ length: N }, () => Math.random() * Math.PI * 2)
+    const reach = Float32Array.from({ length: N }, () => 18 + 70 * Math.random())
+    const size = Float32Array.from({ length: N }, () => 0.6 + 0.8 * Math.random())
+    let points: Float32Array[] = []
+    let frame = { offset: d.engine.x / PITCH, velocity: 0, moving: false }
 
-    const draw = (f: Pick<DetentFrame, 'offset' | 'velocity'>) => {
-      last = f
-      g.setTransform(dpr, 0, 0, dpr, 0, 0)
-      g.clearRect(0, 0, W, H)
-      if (!targets.length) return
-      const a = Math.floor(f.offset)
-      const t = f.offset - a
-      const A = targets[mod(a, N)]!
-      const B = targets[mod(a + 1, N)]!
-      const scatter = 46 + Math.min(220, Math.abs(f.velocity) * 90)
-      for (let k = 0; k < PARTICLES; k++) {
-        const e = ease(Math.min(1, Math.max(0, (t - delay[k]! * 0.7) / 0.55)))
-        const x0 = A[k * 2]!
-        const y0 = A[k * 2 + 1]!
-        const x = x0 + (B[k * 2]! - x0) * e
-        const y = y0 + (B[k * 2 + 1]! - y0) * e
-        // An arc away from the straight line, widest mid-flight.
-        const bow = Math.sin(Math.PI * e) * scatter * reach[k]!
-        g.fillStyle = SHADES[shade[k]!]!
-        g.globalAlpha = 0.85 - 0.35 * Math.sin(Math.PI * e)
-        const s = size[k]!
-        g.fillRect(x + Math.cos(angle[k]!) * bow, y + Math.sin(angle[k]!) * bow, s, s)
+    const draw = () => {
+      const w = cv.clientWidth
+      const h = cv.clientHeight
+      if (!points.length) return
+      const { offset, velocity, moving } = frame
+      const dark = isDark()
+      ctx.globalCompositeOperation = 'source-over'
+      // The background takes the hue of the word it is turning into; while moving it only fades toward it (trails).
+      const i0 = Math.floor(offset)
+      const h0 = words[mod(i0, words.length)]!.hue
+      const hue = h0 + (((words[mod(i0 + 1, words.length)]!.hue - h0 + 540) % 360) - 180) * smooth(offset - i0)
+      const base = dark ? `hsl(${hue} 38% 7%` : `hsl(${hue} 60% 96.5%`
+      ctx.fillStyle = `${base} / ${moving ? 0.32 : 1})`
+      ctx.fillRect(0, 0, w, h)
+      ctx.globalCompositeOperation = dark ? 'lighter' : 'multiply'
+      const from = Math.floor(offset)
+      const k = offset - from
+      const a = mod(from, words.length)
+      const b = mod(from + 1, words.length)
+      const pa = points[a]!
+      const pb = points[b]!
+      const speed = Math.min(3, Math.abs(velocity))
+      for (let n = 0; n < N; n++) {
+        const t = smooth((k - delay[n]!) / 0.65)
+        const arc = Math.sin(Math.PI * t) * (reach[n]! * (0.55 + 0.8 * speed))
+        const x = pa[2 * n]! + (pb[2 * n]! - pa[2 * n]!) * t + Math.cos(angle[n]!) * arc - 10 * velocity * Math.sin(Math.PI * t)
+        const y = pa[2 * n + 1]! + (pb[2 * n + 1]! - pa[2 * n + 1]!) * t + Math.sin(angle[n]!) * arc
+        const hh = words[a]!.hue + (((words[b]!.hue - words[a]!.hue + 540) % 360) - 180) * t
+        ctx.fillStyle = `hsl(${hh} ${dark ? 90 : 80}% ${dark ? 62 + 14 * Math.sin(Math.PI * t) : 40 - 6 * Math.sin(Math.PI * t)}% / ${0.55 + 0.45 * clamp01(1 - arc / 120)})`
+        const s = size[n]! * (dark ? 1 : 1.3)
+        ctx.fillRect(x - s / 2, y - s / 2, s, s)
       }
-      g.globalAlpha = 1
     }
-    const off = d.subscribe(draw)
-    // Glyph shapes need the page font: wait for fonts, then sample once.
+
+    /** The points of a word: its glyphs drawn to a canvas, sampled every 3 px, then dealt out to the particles. */
+    const sample = (text: string, w: number, h: number, family: string) => {
+      const c = document.createElement('canvas')
+      c.width = w
+      c.height = h
+      const g = c.getContext('2d', { willReadFrequently: true })!
+      let px = Math.min(0.5 * h, 170)
+      g.font = `700 ${px}px ${family}`
+      const fit = (0.82 * w) / g.measureText(text).width
+      if (fit < 1) px *= fit
+      g.font = `700 ${px}px ${family}`
+      g.textAlign = 'center'
+      g.textBaseline = 'middle'
+      g.fillText(text, w / 2, h / 2)
+      const data = g.getImageData(0, 0, w, h).data
+      const pts: number[] = []
+      for (let y = 0; y < h; y += 3) for (let x = 0; x < w; x += 3) if (data[(y * w + x) * 4 + 3]! > 128) pts.push(x, y)
+      const out = new Float32Array(N * 2)
+      const count = pts.length / 2
+      for (let n = 0; n < N; n++) {
+        const p = Math.floor(Math.random() * count)
+        out[2 * n] = pts[2 * p]! + (Math.random() - 0.5) * 3
+        out[2 * n + 1] = pts[2 * p + 1]! + (Math.random() - 0.5) * 3
+      }
+      return out
+    }
+
     let alive = true
-    ;(document.fonts?.ready ?? Promise.resolve()).then(() => {
+    const resample = async () => {
+      await document.fonts.ready
       if (!alive) return
-      targets = words.map(sample)
-      draw(last)
+      const family = getComputedStyle(document.body).getPropertyValue('--font-geist-sans').trim() || "Geist, system-ui, sans-serif"
+      const w = Math.max(1, Math.round(cv.clientWidth))
+      const h = Math.max(1, Math.round(cv.clientHeight))
+      points = words.map((word) => sample(word.text, w, h, family))
+      draw()
+    }
+    const stopSize = watchCanvas(cv, () => void resample())
+    const stopTheme = onTheme(draw)
+    const stopFrames = d.subscribe((f) => {
+      frame = { offset: f.offset, velocity: f.mode === 'idle' ? 0 : f.velocity, moving: f.mode !== 'idle' }
+      draw()
     })
-    return () => ((alive = false), off())
+    return () => {
+      alive = false
+      stopSize()
+      stopTheme()
+      stopFrames()
+    }
   })
 </script>
 
-<div class="dust">
-  <div class="stage" {...d.rootAttrs} style={d.rootStyle + `width:${W}px;height:${H}px;touch-action:pan-y`} {@attach d.attachRoot}>
+<div class="stage">
+  <div {...d.rootAttrs} class="root" style="{d.rootStyle}width:100%;height:380px" {@attach d.attachRoot}>
     <div {...d.trackAttrs} style={d.trackStyle} {@attach d.attachTrack}>
       {#each d.rows as r (r.key)}
-        <div {...r.attrs} style={r.style} aria-label={r.item} class="row">{r.item}</div>
+        <div {...r.attrs} class="row" style={r.style}>{r.item.text}</div>
       {/each}
     </div>
-    <canvas bind:this={canvas} aria-hidden="true"></canvas>
+    <canvas bind:this={canvas} class="canvas" aria-hidden="true"></canvas>
   </div>
-  <div class="dots" role="group" aria-label="Choose a word">
-    {#each words as w, i (w)}
-      <button type="button" class="dot" class:on={i === index} aria-label={w} onclick={() => d.scrollTo(i)}></button>
-    {/each}
-  </div>
+  <FxDots count={words.length} index={d.selectedIndex} />
   <div {...d.liveRegionAttrs} style={d.liveRegionStyle}>{d.announcement}</div>
 </div>
 
 <style>
-  .dust { position: relative; width: 520px; max-width: 100%; height: 380px; margin: 0 auto; border-radius: 16px; overflow: hidden; background: #eff5fd; }
-  .stage { cursor: grab; outline: none; border-radius: inherit; }
-  .stage:active { cursor: grabbing; }
-  .row { opacity: 0; pointer-events: none; }
-  canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  .dots { position: absolute; left: 0; right: 0; bottom: 16px; display: flex; gap: 6px; justify-content: center; align-items: center; }
-  .dot { width: 6px; height: 6px; padding: 0; border: 0; border-radius: 99px; background: #c2cbd8; cursor: pointer; transition: width 0.25s, background 0.25s; }
-  .dot.on { width: 18px; background: #222; }
+  .stage { --fg: #0a0a0a; background: #09090b; border-radius: 16px; width: 100%; position: relative; overflow: hidden; box-shadow: inset 0 0 0 0.5px #ffffff14; }
+  /* Light by default, dark when the page is: the stage follows the theme. */
+  .stage { background: #fafaf9; box-shadow: inset 0 0 0 0.5px #0000001a; }
+  .root { cursor: grab; outline: none; position: relative; }
+  .root:focus-visible { border-radius: 16px; box-shadow: inset 0 0 0 1.5px #00000073; }
+  .root[data-dragging] { cursor: grabbing; }
+  /* The words themselves are drawn on the canvas: the rows only carry the text for assistive technology and input. */
+  .row { opacity: 0; place-items: center; display: grid; }
+  .canvas { pointer-events: none; width: 100%; height: 100%; position: absolute; inset: 0; }
   @media (prefers-color-scheme: dark) {
-    .dust { background: #0d1626; } .dot { background: #3a4558; } .dot.on { background: #eee; }
+    .stage { --fg: #ededed; background: #09090b; box-shadow: inset 0 0 0 0.5px #ffffff14; }
+    .root:focus-visible { box-shadow: inset 0 0 0 1.5px #ffffff80; }
   }
 </style>

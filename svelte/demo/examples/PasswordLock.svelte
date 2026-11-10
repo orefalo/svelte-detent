@@ -1,72 +1,77 @@
 <script lang="ts">
-  // In your app: import { Detent } from '@hayderkg/detent-svelte'
+  // In your app: import { Detent, DetentText } from 'svelte-detent'
   import { tick } from 'svelte'
-  import { Detent } from '../../src/lib'
+  import { Detent, DetentText } from '../../src/lib'
 
-  const CHECK = '✓'
-  const faces = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', CHECK]
+  const digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '✓']
   const rules = [
-    { label: '8 or more characters', test: (s: string) => s.length >= 8 },
-    { label: 'Includes a digit', test: (s: string) => /\d/.test(s) },
-    { label: 'One capital letter', test: (s: string) => /[A-Z]/.test(s) },
-    { label: 'A special character', test: (s: string) => /[^A-Za-z0-9]/.test(s) },
+    { label: '8 or more characters', test: (s: string) => [...s].length >= 8 },
+    { label: 'Includes a digit', test: (s: string) => /\p{N}/u.test(s) },
+    { label: 'One capital letter', test: (s: string) => /\p{Lu}/u.test(s) },
+    { label: 'A special character', test: (s: string) => /[^\p{L}\p{N}\s]/u.test(s) },
   ]
-
-  let secret = $state('')
-  let shown = $state(false)
-  let field = $state<HTMLInputElement | null>(null)
-
-  const met = $derived(rules.map((r) => r.test(secret)))
-  const ready = $derived(met.every(Boolean))
-  // Each rule turns a drum. While a rule is open the drum shows a digit that depends on what you typed (so it
-  // rolls as you type); once the rule is met it lands on the check.
-  const resting = [3, 7, 8, 9]
-  const faceFor = (i: number) => {
-    if (met[i]) return CHECK
-    if (!secret) return String(resting[i])
-    let h = i + 3
-    for (const c of secret) h = (h * 31 + c.codePointAt(0)!) % 997
-    return String(h % 10)
+  /** What the drums show before you type. */
+  const resting = ['3', '7', '8', '9']
+  /** Typing turns the drums to a digit that depends on the text and the drum (a small hash), until its rule is met. */
+  const digitFor = (text: string, drum: number) => {
+    let h = 0x811c9dc5 ^ drum
+    for (const ch of text) h = Math.imul(h ^ ch.codePointAt(0)!, 0x1000193)
+    return String((h >>> 0) % 10)
   }
 
-  // The show/hide eye keeps the caret (and any selection) where it was.
-  async function toggle() {
-    const el = field
-    const [a, b, dir] = [el?.selectionStart ?? null, el?.selectionEnd ?? null, el?.selectionDirection ?? 'none']
+  const id = $props.id()
+  let input = $state<HTMLInputElement | null>(null)
+  let password = $state('')
+  let shown = $state(false)
+  let phase = $state<'idle' | 'creating' | 'done'>('idle')
+  const met = $derived(rules.map((r) => r.test(password)))
+  const ok = $derived(met.every(Boolean))
+
+  $effect(() => {
+    if (phase !== 'creating') return
+    const timer = setTimeout(() => (phase = 'done'), 1100)
+    return () => clearTimeout(timer)
+  })
+
+  /** Show or hide the password without losing the caret or the selection. */
+  async function toggleEye() {
+    const el = input
+    const range = el ? [el.selectionStart ?? el.value.length, el.selectionEnd ?? el.value.length] : null
     shown = !shown
     await tick()
-    el?.focus()
-    if (el && a !== null && b !== null) el.setSelectionRange(a, b, dir)
+    if (el && range && document.activeElement === el) el.setSelectionRange(range[0]!, range[1]!)
   }
 </script>
 
 <div class="pw">
-  <div class="lock" aria-hidden="true">
-    <div class="window">
-      {#each rules as _, i (i)}
-        <div class="drum">
+  <div class="pw-lock" class:pw-open={ok} aria-hidden="true">
+    <div class="pw-window">
+      {#each rules as rule, a (rule.label)}
+        <div class="pw-drum">
           <Detent
-            items={faces}
-            value={faceFor(i)}
-            label={`Rule ${i + 1}`}
+            items={digits}
+            value={met[a] ? '✓' : password ? digitFor(password, a) : resting[a]}
             loop
+            disabled
+            label={rule.label}
             itemHeight={28}
             visibleCount={3}
             width={19}
-            height={84}
-            curvature={0.5}
-            fade={0.35}
-            dim={0}
-            highlight={false}
+            perspective={240}
+            curvature={0.9}
+            fade={0.25}
+            indicator={{ shape: 'none' }}
             magnify={false}
-            mask="none"
-            disabled
-            style="pointer-events:none;--detent-font-size:20px"
+            preset="snappy"
+            motionBlur={2}
+            style="--detent-fg:#ededed"
           >
-            {#snippet item(f: string)}
-              {#if f === CHECK}
-                <svg class="check" width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 7.5 3 3 6-7" /></svg>
-              {:else}{f}{/if}
+            {#snippet item(v: string)}
+              {#if v === '✓'}
+                <svg class="pw-check" viewBox="0 0 20 20" width="18" height="18" aria-hidden="true"><path d="M4.5 10.5l3.6 3.4L15.5 6.5" /></svg>
+              {:else}
+                <span class="pw-digit">{v}</span>
+              {/if}
             {/snippet}
           </Detent>
         </div>
@@ -74,52 +79,113 @@
     </div>
   </div>
 
-  <h4>Create a password</h4>
+  <p class="pw-title">Create a password</p>
 
-  <div class="input">
-    <input bind:this={field} bind:value={secret} type={shown ? 'text' : 'password'} placeholder="Password" autocomplete="new-password" spellcheck="false" aria-describedby="rules" />
-    <button type="button" class="eye" aria-label={shown ? 'Hide password' : 'Show password'} aria-pressed={shown} onmousedown={(e) => e.preventDefault()} onclick={toggle}>
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-        {#if shown}<path d="M3 3l18 18M10.6 6.2A9.6 9.6 0 0 1 12 6c5 0 9 6 9 6a15 15 0 0 1-3.2 3.7M6.5 7.4C4 9 3 12 3 12s4 6 9 6c1.400 0 2.700-.4 3.800-1" />{:else}<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z" /><circle cx="12" cy="12" r="3" />{/if}
+  <div class="pw-field">
+    <input
+      bind:this={input}
+      {id}
+      type={shown ? 'text' : 'password'}
+      value={password}
+      oninput={(e) => ((password = e.currentTarget.value), (phase = 'idle'))}
+      placeholder="Password"
+      aria-label="Password"
+      aria-describedby="{id}-rules"
+      autocomplete="new-password"
+      autocapitalize="off"
+      spellcheck={false}
+    />
+    <button type="button" class="pw-eye" aria-label={shown ? 'Hide password' : 'Show password'} aria-controls={id} aria-pressed={shown} onpointerdown={(e) => e.preventDefault()} onclick={toggleEye}>
+      <svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" class={shown ? 'pw-crossed' : undefined}>
+        <path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12Z" />
+        <circle cx="12" cy="12" r="3" class="pw-pupil" />
+        <path d="M4 4l16 16" pathLength="1" class="pw-gap" />
+        <path d="M4 4l16 16" pathLength="1" class="pw-slash" />
       </svg>
     </button>
   </div>
 
-  <ul id="rules">
-    {#each rules as r, i (r.label)}
-      <li class:met={met[i]}>
-        <span class="dot">{#if met[i]}<svg width="12" height="12" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m2.5 7.5 3 3 6-7" /></svg>{/if}</span>
-        {r.label}
+  <ul id="{id}-rules" class="pw-rules">
+    {#each rules as rule, i (rule.label)}
+      <li class={met[i] ? 'pw-met' : undefined}>
+        <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="9" /><path d="M6 10.4l2.6 2.5L14 7.4" pathLength="1" /></svg>
+        {rule.label}<span class="pw-sr">{met[i] ? ', met' : ', not met'}</span>
       </li>
     {/each}
   </ul>
+  <p class="pw-sr" aria-live="polite">{met.filter(Boolean).length} of {rules.length} requirements met</p>
 
-  <button type="button" class="save" disabled={!ready}>Save password</button>
-  <p class="foot">You can change it anytime in Settings,<br />under Security.</p>
+  <button type="button" class="pw-submit pw-{phase}" disabled={!ok || phase === 'creating'} aria-disabled={phase === 'done' || undefined} onclick={() => phase === 'idle' && (phase = 'creating')}>
+    <DetentText text={phase === 'creating' ? 'Securing…' : phase === 'done' ? 'Password saved' : 'Save password'} />
+  </button>
+  <p class="pw-legal">You can change it anytime in Settings, under Security.</p>
 </div>
 
 <style>
-  .pw { width: 320px; box-sizing: border-box; padding: 8px 4px; margin: 0 auto; display: grid; gap: 16px; justify-items: center; color: #0a0a0a; font-family: system-ui, sans-serif; }
-  .lock { width: 116px; height: 116px; border-radius: 27px; display: grid; place-items: center; background: linear-gradient(165deg, #4b4b4f, #232325 55%, #1a1a1c); box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 14px 24px -12px rgb(0 0 0 / 0.5); }
-  .window { display: flex; gap: 3px; padding: 4px 7px; height: 92px; box-sizing: border-box; border-radius: 14px; background: #111112; box-shadow: inset 0 3px 8px rgb(0 0 0 / 0.85), inset 0 0 0 1px rgb(0 0 0 / 0.7); align-items: center; }
-  .drum { width: 19px; height: 84px; color: #f2f2f2; font-family: ui-monospace, 'SF Mono', Menlo, monospace; }
-  .drum :global([data-detent-ui]) { --detent-fg: #f2f2f2; --detent-dim-color: #555; cursor: default; }
-  .check { color: #35c27b; }
-  h4 { margin: 0; font-size: 24px; font-weight: 650; letter-spacing: -0.01em; }
-  .input { position: relative; width: 312px; }
-  input { width: 100%; height: 50px; box-sizing: border-box; padding: 0 44px 0 16px; border: 1px solid rgb(0 0 0 / 0.12); border-radius: 14px; font: 17px system-ui, sans-serif; background: #fff; color: inherit; outline: none; }
-  input:focus { border-color: rgb(0 0 0 / 0.45); box-shadow: 0 0 0 3px rgb(0 0 0 / 0.06); }
-  .eye { position: absolute; right: 8px; top: 7px; width: 36px; height: 36px; border: 0; border-radius: 10px; background: none; color: #555; cursor: pointer; display: grid; place-items: center; }
-  ul { list-style: none; margin: 0; padding: 0; width: 312px; display: grid; gap: 10px; font-size: 14px; color: #666; }
-  li { display: flex; align-items: center; gap: 10px; transition: color 0.2s; }
-  li.met { color: #0a0a0a; }
-  .dot { width: 20px; height: 20px; border-radius: 50%; box-shadow: inset 0 0 0 1.5px rgb(0 0 0 / 0.14); display: grid; place-items: center; transition: background 0.2s, box-shadow 0.2s; }
-  li.met .dot { background: #35c27b; box-shadow: none; color: #fff; }
-  .save { width: 312px; height: 50px; border: 0; border-radius: 14px; font: 600 16px system-ui, sans-serif; background: #0a0a0a; color: #fff; cursor: pointer; transition: background 0.2s, color 0.2s; }
-  .save:disabled { background: rgb(0 0 0 / 0.06); color: #777; cursor: default; }
-  .foot { margin: 0; font-size: 12.5px; line-height: 1.4; text-align: center; color: #777; }
-  @media (prefers-color-scheme: dark) {
-    .pw { color: #ededed; } input { background: #161616; border-color: rgb(255 255 255 / 0.16); } li.met { color: #ededed; } ul, .foot { color: #999; }
-    .save { background: #ededed; color: #0a0a0a; } .save:disabled { background: rgb(255 255 255 / 0.08); color: #888; } .eye { color: #aaa; }
-  }
+  .pw { --pw-ok: #1f9d55; --pw-ease: cubic-bezier(0.23, 1, 0.32, 1); --fg: #0a0a0a; --bg: #fff; --muted: #6b6b6b; --line: #00000014; --band: #0000000a;
+    width: 100%; max-width: 320px; display: grid; justify-items: center; gap: 16px; padding: 8px 4px; font: 15px/1.4 'Geist', system-ui, sans-serif; color: var(--fg); }
+  :global(:root[data-theme='dark']) .pw { --pw-ok: #4ade80; }
+  @media (prefers-color-scheme: dark) { :global(:root:not([data-theme='light'])) .pw { --pw-ok: #4ade80; --fg: #ededed; --bg: #0a0a0a; --muted: #8f8f8f; --line: #ffffff1a; --band: #ffffff0f; } }
+  .pw-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+
+  /* The lock: a dark, softly lit body with a recessed window of four drums. */
+  .pw-lock { width: 116px; height: 116px; border-radius: 27px; display: grid; place-items: center;
+    background: linear-gradient(165deg, #4b4b4f, #232325 55%, #1a1a1c);
+    box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 -1px 0 rgb(0 0 0 / 0.6), 0 14px 30px -10px rgb(0 0 0 / 0.55), 0 2px 5px rgb(0 0 0 / 0.18); }
+  .pw-window { position: relative; display: flex; gap: 3px; padding: 4px 7px; border-radius: 14px; background: #111112;
+    box-shadow: inset 0 3px 8px rgb(0 0 0 / 0.85), inset 0 0 0 1px rgb(0 0 0 / 0.7), 0 1px 0 rgb(255 255 255 / 0.07), 0 0 0 0 transparent;
+    transition: box-shadow 250ms var(--pw-ease); }
+  .pw-open .pw-window { box-shadow: inset 0 3px 8px rgb(0 0 0 / 0.85), inset 0 0 0 1px rgb(74 222 128 / 0.28), 0 1px 0 rgb(255 255 255 / 0.07), 0 0 18px -4px rgb(74 222 128 / 0.45); }
+  .pw-drum { position: relative; font: 500 24px/1 'Geist Mono', ui-monospace, monospace; }
+  /* Tall, narrow numerals, like a printed drum: the same glyph, drawn condensed. */
+  .pw-digit { display: inline-block; transform: scaleX(0.84); }
+  /* A cylinder's light: dark at the top and bottom, a faint highlight across the middle. */
+  .pw-drum::after { content: ''; position: absolute; inset: 0; pointer-events: none; border-radius: 3px;
+    background: linear-gradient(to bottom, rgb(0 0 0 / 0.72), transparent 32%, rgb(255 255 255 / 0.05) 50%, transparent 68%, rgb(0 0 0 / 0.72)); }
+  /* Perforated dividers between the drums. */
+  .pw-drum + .pw-drum::before { content: ''; position: absolute; left: -3px; top: 2px; bottom: 2px; width: 2px; z-index: 1;
+    background: repeating-linear-gradient(to bottom, rgb(255 255 255 / 0.16) 0 1px, transparent 1px 3px); }
+  .pw-check { display: block; fill: none; stroke: #4ade80; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; filter: drop-shadow(0 0 4px rgb(74 222 128 / 0.5)); }
+
+  .pw-title { margin: 6px 0 2px; font: 600 22px/1.25 'Geist', system-ui, sans-serif; letter-spacing: -0.02em; color: var(--fg); }
+
+  .pw-field { position: relative; width: 100%; }
+  .pw-field input { box-sizing: border-box; width: 100%; height: 50px; padding: 0 50px 0 16px; border-radius: 15px; border: 1px solid var(--line);
+    background: var(--bg); color: var(--fg); font: 16px/1 'Geist Mono', ui-monospace, monospace; letter-spacing: 0; outline: none;
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.04); transition: border-color 150ms var(--pw-ease), box-shadow 150ms var(--pw-ease); }
+  /* What you type is set in mono, dots included; the placeholder stays in the sans of the rest of the form. */
+  .pw-field input::placeholder { color: var(--muted); font-family: 'Geist', system-ui, sans-serif; }
+  .pw-field input:focus-visible { outline: none; border-color: color-mix(in srgb, var(--fg) 30%, transparent); box-shadow: 0 0 0 4px color-mix(in srgb, var(--fg) 7%, transparent); }
+  .pw-eye { position: absolute; right: 6px; top: 50%; width: 38px; height: 38px; margin-top: -19px; display: grid; place-items: center; border: 0; border-radius: 11px;
+    background: none; color: var(--muted); cursor: pointer; -webkit-tap-highlight-color: transparent; transition: color 150ms var(--pw-ease), background-color 150ms var(--pw-ease), transform 150ms var(--pw-ease); }
+  .pw-eye:active { transform: scale(0.92); }
+  @media (hover: hover) { .pw-eye:hover { color: var(--fg); background: var(--band); } }
+  .pw-eye svg { fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; overflow: visible; }
+  .pw-pupil { transform-origin: 12px 12px; transition: transform 200ms var(--pw-ease); }
+  .pw-crossed .pw-pupil { transform: scale(0.6); }
+  .pw-slash, .pw-gap { stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 200ms var(--pw-ease); }
+  .pw-gap { stroke: var(--bg); stroke-width: 4.5; }
+  @media (hover: hover) { .pw-eye:hover .pw-gap { stroke: color-mix(in srgb, var(--bg) 96%, var(--fg)); } }
+  .pw-crossed .pw-slash, .pw-crossed .pw-gap { stroke-dashoffset: 0; }
+
+  .pw-rules { list-style: none; margin: 2px 0 0; padding: 0; width: 100%; display: grid; gap: 10px; }
+  .pw-rules li { display: flex; align-items: center; gap: 11px; margin: 0; font-size: 13.5px; color: var(--muted); transition: color 200ms var(--pw-ease); }
+  .pw-rules svg { width: 20px; height: 20px; flex: none; overflow: visible; }
+  .pw-rules circle { fill: transparent; stroke: var(--line); stroke-width: 1.5; transform-origin: 10px 10px;
+    transition: fill 200ms var(--pw-ease), stroke 200ms var(--pw-ease), transform 250ms var(--pw-ease); }
+  .pw-rules path { fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 1; transition: stroke-dashoffset 150ms var(--pw-ease); }
+  .pw-rules .pw-met { color: var(--pw-ok); }
+  .pw-met circle { fill: var(--pw-ok); stroke: var(--pw-ok); animation: pw-pop 300ms var(--pw-ease); }
+  .pw-met path { stroke-dashoffset: 0; transition-duration: 220ms; transition-delay: 60ms; }
+  @keyframes pw-pop { from { transform: scale(0.72); } }
+
+  .pw-submit { width: 100%; height: 50px; margin-top: 6px; border-radius: 15px; border: 1px solid var(--line); background: var(--band);
+    color: var(--muted); font: inherit; font-size: 16px; font-weight: 550; cursor: not-allowed; -webkit-tap-highlight-color: transparent;
+    transition: background-color 200ms var(--pw-ease), color 200ms var(--pw-ease), border-color 200ms var(--pw-ease), transform 150ms var(--pw-ease); }
+  .pw-submit:enabled { background: var(--fg); border-color: transparent; color: var(--bg); cursor: pointer; }
+  .pw-submit:enabled:active { transform: scale(0.98); }
+  .pw-submit.pw-creating { background: var(--fg); border-color: transparent; color: var(--bg); opacity: 0.75; cursor: progress; }
+  .pw-submit.pw-done { background: var(--pw-ok); border-color: transparent; color: #fff; cursor: default; }
+  .pw-legal { margin: 2px 0 0; max-width: 270px; text-align: center; font: 12.5px/1.45 'Geist', system-ui, sans-serif; color: var(--muted); }
+  @media (prefers-reduced-motion: reduce) { .pw :global(*) { transition: none !important; animation: none !important; } }
 </style>

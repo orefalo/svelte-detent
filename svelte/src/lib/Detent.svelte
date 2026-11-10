@@ -265,22 +265,26 @@
   )
   useElasticRows(d, [() => trackEl, () => slotsEl, () => lensEl], () => ({ amount: elasticAmount, pitch, vertical, rtl: d.rtl }))
 
+  // Which hand-written root variables exist: reading them back from the style every frame costs a style read.
+  const wrote = { tilt: false, light: false, depth: false, motion: false }
   /** Bring the mirror layers and JS-driven row values in line with the main track at `offset` (rows). */
   function sync(offset: number, velocity = 0) {
     const root = rootEl
-    if (tiltMax || root?.style.getPropertyValue('--detent-velocity-tilt')) {
+    if (tiltMax || wrote.tilt) {
+      wrote.tilt = true
       const angle = reducedMotion ? 0 : Math.max(-1, Math.min(1, velocity / 3)) * tiltMax * (vertical || d.rtl ? -1 : 1)
       root?.style.setProperty('--detent-velocity-tilt', `${Math.abs(angle) < 0.01 ? 0 : Number(angle.toFixed(3))}deg`)
     }
-    if (lightMax || root?.style.getPropertyValue('--detent-center-light')) root?.style.setProperty('--detent-center-light', String(reducedMotion ? 0 : lightMax))
-    if (depthMax || root?.style.getPropertyValue('--detent-depth')) root?.style.setProperty('--detent-depth', String(reducedMotion ? 0 : depthMax))
+    if (lightMax || wrote.light) ((wrote.light = true), root?.style.setProperty('--detent-center-light', String(reducedMotion ? 0 : lightMax)))
+    if (depthMax || wrote.depth) ((wrote.depth = true), root?.style.setProperty('--detent-depth', String(reducedMotion ? 0 : depthMax)))
     const amount = reducedMotion ? 0 : Math.min(motionMax, Math.abs(velocity) * 1.5)
     const active = amount >= 0.1 && !!motionFilter
     if (motionFilter) {
       const deviation = active ? Number(amount.toFixed(2)) : 0
       motionFilter.setAttribute('stdDeviation', vertical ? `0 ${deviation}` : `${deviation} 0`)
     }
-    if (motionMax || root?.style.getPropertyValue('--detent-motion-filter')) {
+    if (motionMax || wrote.motion) {
+      wrote.motion = true
       root?.style.setProperty('--detent-motion-filter', active ? `url(#${motionId})` : 'blur(0px)')
     }
     const t = trackEl?.style.transform

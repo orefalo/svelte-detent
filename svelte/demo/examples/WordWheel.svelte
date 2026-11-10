@@ -1,50 +1,36 @@
 <script lang="ts">
-  // In your app: import { Detent } from '@hayderkg/detent-svelte'
+  // In your app: import { Detent } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
   import { Detent } from '../../src/lib'
 
+  const tick = ticks({ sound: true, haptics: true })
   const verbs = ['build', 'design', 'ship', 'break', 'tune', 'feel']
-  let verb = $state('ship')
 </script>
 
-<!-- A word that turns inside a sentence; the indicator hugs each word and the rest of the sentence follows its width. -->
-<p class="sentence">
-  <span>I want to</span>
-  <span class="wheel">
-    <Detent
-      items={verbs}
-      bind:value={verb}
-      label="Verb"
-      loop
-      itemHeight={56}
-      visibleCount={3}
-      curvature={0.9}
-      perspective={800}
-      fade={0.6}
-      dim={0}
-      magnify={false}
-      mask="none"
-      width="4.1em"
-      align="start"
-      indicator={{ fit: 'content', shape: 'pill', material: 'glass' }}
-      style="--detent-font-size:1em;--detent-fg:var(--accent, #ff5a1f);margin-right:calc(var(--indicator-w, 100px) - 4.1em - 4px)"
-    />
-  </span>
-  <span>things.</span>
-</p>
+<div class="line">
+  <span class="rest">I want to</span>
+  <Detent
+    onTick={tick}
+    items={verbs}
+    defaultValue="ship"
+    loop
+    label="Verb"
+    visibleCount={3}
+    itemHeight={56}
+    width="4.1em"
+    align="start"
+    curvature={0.9}
+    fade={0.6}
+    dim={0}
+    magnify={false}
+    indicator={{ fit: 'content', material: 'glass', shape: 'pill', paddingX: 12, paddingY: 4 }}
+    maskSize="40%"
+    style="--detent-font-size:1em;--detent-fg:var(--accent, #ff5a1f);margin-right:calc(var(--indicator-w, 4.1em) + 8px - 4.1em)"
+  />
+  <span class="rest">things.</span>
+</div>
 
 <style>
-  .sentence {
-    --accent: #ff5a1f;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    gap: 0.3em;
-    margin: 0;
-    padding: 48px 0;
-    font-size: 41px;
-    font-weight: 600;
-    letter-spacing: -0.045em;
-    white-space: nowrap;
-  }
-  .wheel { display: inline-block; }
+  .line { --accent: #ff5a1f; display: flex; align-items: center; gap: 0 0.26em; margin: 0; font-size: clamp(24px, 5.4vw, 41px); font-weight: 600; letter-spacing: -0.045em; line-height: 1; }
+  .rest { white-space: nowrap; }
 </style>

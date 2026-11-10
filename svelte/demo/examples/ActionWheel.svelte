@@ -1,63 +1,120 @@
 <script lang="ts">
-  // In your app: import { Detent } from '@hayderkg/detent-svelte'
-  import { Detent } from '../../src/lib'
+  // In your app: import { Detent, DetentText } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
+  import { Detent, DetentText } from '../../src/lib'
 
-  interface Action { id: string; label: string; kind: 'switch' | 'run'; icon: string }
-  // Tiny stroke icons (24×24 grid).
+  type Kind = 'toggle' | 'button'
+  interface Action { id: string; label: string; kind: Kind }
+  const tick = ticks({ sound: true, haptics: true })
   const actions: Action[] = [
-    { id: 'wifi', label: 'Wi-Fi', kind: 'switch', icon: 'M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01' },
-    { id: 'bt', label: 'Bluetooth', kind: 'switch', icon: 'm7 7 10 10-5 4V3l5 4L7 17' },
-    { id: 'air', label: 'Airplane mode', kind: 'switch', icon: 'M2 13l8-2 4-8h2l-2 8 6 1v2l-6 1 2 7h-2l-4-6-8-1z' },
-    { id: 'dnd', label: 'Do Not Disturb', kind: 'switch', icon: 'M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5z' },
-    { id: 'share', label: 'Share screen', kind: 'run', icon: 'M3 5h18v11H3zM8 21h8M12 16v5' },
-    { id: 'lock', label: 'Lock now', kind: 'run', icon: 'M6 11h12v9H6zM8 11V8a4 4 0 0 1 8 0v3' },
-    { id: 'power', label: 'Low Power', kind: 'switch', icon: 'M4 8h14v8H4zM20 11v2M8 10.5v3' },
+    { id: 'wifi', label: 'Wi-Fi', kind: 'toggle' },
+    { id: 'bt', label: 'Bluetooth', kind: 'toggle' },
+    { id: 'plane', label: 'Airplane mode', kind: 'toggle' },
+    { id: 'dnd', label: 'Do Not Disturb', kind: 'toggle' },
+    { id: 'share', label: 'Share screen', kind: 'button' },
+    { id: 'lock', label: 'Lock now', kind: 'button' },
+    { id: 'power', label: 'Low Power', kind: 'toggle' },
   ]
-  let on = $state<Record<string, boolean>>({ bt: true })
-  let ran = $state('')
-  let value = $state(actions[3]!)
+  /** What the line under the wheel says after an action: [off or run, on]. */
+  const replies: Record<string, [string, string]> = {
+    wifi: ['A little less connected.', 'Back on the grid.'],
+    bt: ['Flying solo.', 'Better together.'],
+    plane: ['Back on the ground.', 'Cleared for takeoff.'],
+    dnd: ['The world can wait. Or not.', 'A little peace and quiet.'],
+    power: ['Full steam ahead.', "Making every percent count."],
+    share: ['Your screen, centre stage.', 'Your screen, centre stage.'],
+    lock: ['Safe and sound.', 'Safe and sound.'],
+  }
+
+  let on = $state<Record<string, boolean>>({ wifi: true, bt: true })
+  let message = $state('')
+  /** Which glyph just responded; `n` changes so the little animation plays again. */
+  let pulse = $state({ id: '', n: 0 })
+
+  function respond(id: string, enabled: boolean) {
+    message = replies[id]![Number(enabled)]!
+    pulse = { id, n: pulse.n + 1 }
+  }
+  function toggle(id: string) {
+    const next = !on[id]
+    on = { ...on, [id]: next }
+    respond(id, next)
+  }
 </script>
 
-<div class="card">
+<div class="action-demo">
   <Detent
+    onTick={tick}
     items={actions}
-    bind:value
     getKey={(a) => a.id}
     getLabel={(a) => a.label}
+    defaultValue={actions[3]}
     label="Quick actions"
     interactive
-    width={300}
     itemHeight={52}
     visibleCount={5}
+    width="min(300px, 100%)"
+    preset="snappy"
+    align="start"
     curvature={0.6}
-    fade={0.16}
-    dim={0.22}
     magnify={false}
   >
-    {#snippet item(a)}
+    {#snippet item(a: Action)}
       <div class="row">
-        <span class="tile"><svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d={a.icon} /></svg></span>
-        <span class="label">{a.label}</span>
-        {#if a.kind === 'switch'}
-          <button type="button" role="switch" aria-checked={!!on[a.id]} aria-label={a.label} class="switch" class:on={on[a.id]} onclick={() => (on[a.id] = !on[a.id])}><span></span></button>
+        {#key `${a.id}-${pulse.id === a.id ? pulse.n : 0}`}
+          <span class="action-glyph" data-action={a.id} data-enabled={!!on[a.id]} data-respond={pulse.id === a.id ? '' : undefined} aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              {#if a.id === 'wifi'}
+                <path d="M2.5 9a14 14 0 0 1 19 0" /><path d="M5.5 12.5a9.5 9.5 0 0 1 13 0" /><path d="M8.75 16a5 5 0 0 1 6.5 0" /><circle cx="12" cy="19.25" r="0.9" fill="currentColor" />
+              {:else if a.id === 'bt'}
+                <path d="M7 7.5l10 9-5 4.5V3l5 4.5-10 9" />
+              {:else if a.id === 'plane'}
+                <path d="M10.5 3.8c0-1 .7-1.8 1.5-1.8s1.5.8 1.5 1.8V9l7.5 4.5v2L13.5 13v4.8l2.5 1.9V21L12 20l-4 1v-1.3l2.5-1.9V13L3 15.5v-2L10.5 9z" />
+              {:else if a.id === 'dnd'}
+                <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+              {:else if a.id === 'share'}
+                <rect x="3" y="4" width="18" height="13" rx="2" /><path d="M8 21h8M12 17v4M12 13.5v-6M9.25 10 12 7.25 14.75 10" />
+              {:else if a.id === 'lock'}
+                <rect x="5" y="10.5" width="14" height="10" rx="2" /><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" />
+              {:else}
+                <rect x="2.5" y="7" width="17" height="10" rx="2.5" /><path d="M21.5 10.5v3" /><rect x="5" y="9.5" width="4" height="5" rx="1" fill="currentColor" stroke="none" />
+              {/if}
+            </svg>
+          </span>
+        {/key}
+        <span>{a.label}</span>
+        {#if a.kind === 'toggle'}
+          <button type="button" role="switch" class="switch" class:on={on[a.id]} aria-checked={!!on[a.id]} aria-label={a.label} onclick={() => toggle(a.id)}><span></span></button>
         {:else}
-          <button type="button" class="run" onclick={() => (ran = a.label)}>Run</button>
+          <button type="button" class="run" onclick={() => respond(a.id, true)}>Run</button>
         {/if}
       </div>
     {/snippet}
   </Detent>
-  <p class="note" aria-live="polite">{ran ? `Ran “${ran}”` : ''}</p>
+  <output role="status" class="reply"><DetentText text={message} /></output>
 </div>
 
 <style>
-  .card { display: grid; place-items: center; gap: 8px; min-height: 340px; width: 100%; align-content: center; }
-  .row { display: flex; align-items: center; gap: 12px; width: 100%; padding-inline: 16px; font-size: 15px; box-sizing: border-box; }
-  .tile { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 9px; background: rgb(128 128 128 / 0.14); flex: none; }
-  .label { flex: 1; text-align: start; }
-  .switch { position: relative; width: 40px; height: 24px; padding: 0; border: 0; border-radius: 999px; background: rgb(128 128 128 / 0.35); cursor: pointer; transition: background 0.2s; flex: none; }
-  .switch span { position: absolute; top: 2px; left: 2px; width: 20px; height: 20px; border-radius: 999px; background: #fff; box-shadow: 0 1px 3px rgb(0 0 0 / 0.3); transition: transform 0.2s; }
-  .switch.on { background: #34c759; }
+  .action-demo { display: grid; justify-items: center; gap: 16px; width: 100%; }
+  .row { display: flex; align-items: center; width: 100%; gap: 12px; font-size: 15px; }
+  .action-glyph { display: grid; place-items: center; flex: none; width: 30px; height: 30px; border-radius: 9px; background: rgb(128 128 128 / 0.14); color: inherit; transition: color 180ms ease, background-color 180ms ease; }
+  .action-glyph[data-enabled='true'] { background: color-mix(in srgb, #16a34a 12%, transparent); color: #16a34a; }
+  .action-glyph[data-respond] svg { animation: action-nod 340ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .action-glyph[data-respond][data-action='plane'][data-enabled='true'] svg { animation-name: action-takeoff; }
+  .action-glyph[data-respond][data-action='dnd'][data-enabled='true'] svg { animation-name: action-moon; }
+  .action-glyph[data-respond][data-action='lock'] svg { animation-name: action-lock; }
+  @keyframes action-nod { 0%, 100% { transform: scale(1); } 40% { transform: scale(1.14); } }
+  @keyframes action-takeoff { 0%, 100% { transform: translate(0, 0); } 45% { transform: translate(2px, -3px) rotate(8deg); } }
+  @keyframes action-moon { 0%, 100% { transform: rotate(0); } 45% { transform: rotate(-16deg); } }
+  @keyframes action-lock { 0%, 100% { transform: translateX(0); } 30% { transform: translateX(-1.5px); } 65% { transform: translateX(1.5px); } }
+  .switch { margin-left: auto; width: 40px; height: 24px; border-radius: 99px; border: 0; padding: 2px; cursor: pointer; background: rgb(128 128 128 / 0.35); transition: background-color 160ms cubic-bezier(0.23, 1, 0.32, 1); }
+  .switch.on { background: #16a34a; }
+  .switch span { display: block; width: 20px; height: 20px; border-radius: 99px; background: #fff; transition: transform 160ms cubic-bezier(0.23, 1, 0.32, 1); }
   .switch.on span { transform: translateX(16px); }
-  .run { padding: 3px 10px; border: 1px solid rgb(128 128 128 / 0.45); border-radius: 6px; background: transparent; color: inherit; font: 12px system-ui; cursor: pointer; flex: none; }
-  .note { margin: 0; min-height: 1.2em; font-size: 12px; opacity: 0.6; }
+  .run { margin-left: auto; height: 28px; padding: 0 12px; border-radius: 8px; border: 1px solid rgb(128 128 128 / 0.3); background: transparent; color: inherit; font: inherit; font-size: 13px; cursor: pointer; }
+  .reply { font-size: 12px; min-height: 16px; opacity: 0.6; }
+  @media (prefers-reduced-motion: reduce) {
+    .action-glyph[data-respond] svg { animation: none; }
+    .action-glyph, .action-demo button, .action-demo button span { transition: none !important; }
+  }
 </style>

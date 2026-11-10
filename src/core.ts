@@ -1,5 +1,5 @@
 // The framework-free half of detent: physics, engine, presets and the rolling-label controllers.
-// Framework bindings (@hayderkg/detent-svelte) build on this entry; it never imports React.
+// Framework bindings (svelte-detent) build on this entry; it never imports React.
 export * from './physics'
 export { ios, presets, resolvePhysics } from './presets'
 export type { Physics, PhysicsOptions, PresetName } from './presets'

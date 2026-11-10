@@ -1,210 +1,203 @@
 <script lang="ts">
-  // In your app: import { createDetent } from '@hayderkg/detent-svelte'
-  import { createDetent, type DetentFrame } from '../../src/lib'
+  // In your app: import { createDetent } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
+  import { createDetent } from '../../src/lib'
+  import FxDots from '../site/FxDots.svelte'
+  import { isDark, mod, onTheme, smooth, watchCanvas } from '../site/FxCommon'
 
   /**
-   * Photos printed in two inks as a halftone. Both screens use one dot lattice for every photo, so turning the wheel
-   * dissolves a print into the next dot by dot (each dot swaps at its own moment), and speed slides the two plates
-   * apart, out of register.
+   * Photos printed in two inks as a halftone. Each print is turned into a rank map (its darkest pixels first), and
+   * each ink prints dots on its own screen angle where the map is dark enough. Between two prints the dots dissolve
+   * from one to the next; speed pulls the two plates out of register.
    */
-  let { base = 'https://detent.hayder.sh/photos' }: { base?: string } = $props()
-  const prints = [1, 2, 3, 4, 5, 6].map((n) => ({ id: `mist-${n}`, label: `Mist ${n}`, src: `${base}/mist-${n}.webp` }))
-  const N = prints.length
-  const W = 520
-  const H = 460
-  const PW = 225 // the print, css px
-  const PH = 400
-  const PX = 148
-  const PY = 30
-  const CELL = 5.2
-  const PITCH = 270
-  const PAPER = '#f2eee6'
-  const PINK = '#ff4f95'
-  const BLUE = '#2b3fc4'
-  const mod = (n: number, m: number) => ((n % m) + m) % m
+  /** Where the photos are served from. */
+  let { base = 'https://detent.hayder.sh' }: { base?: string } = $props()
 
-  let index = $state(0)
+  const prints = [1, 2, 3, 4, 5, 6].map((n) => ({ src: `/photos/mist-${n}.webp`, label: `Mist ${n}` }))
+  const PITCH = 92
+  /** The inks: pink and blue on paper, and (on a dark page) the same screens in light. */
+  const light = [
+    { ink: '#ff5ca8', angle: (15 * Math.PI) / 180, gamma: 1.1, gain: 0.7, dir: 1 },
+    { ink: '#3f86ff', angle: (75 * Math.PI) / 180, gamma: 2.2, gain: 0.85, dir: -1 },
+  ]
+  const dark = [
+    { ink: '#ff5c9f', angle: (15 * Math.PI) / 180, gamma: 0.9, gain: 0.7, dir: 1 },
+    { ink: '#1f4fbf', angle: (75 * Math.PI) / 180, gamma: 2.8, gain: 0.8, dir: -1 },
+  ]
+  /** The print's rectangle in a stage of this size: 9:16, with room for the labels on the right. */
+  const frameOf = (w: number, h: number) => {
+    const ph = h - 60
+    const pw = Math.min(w - 60 - 120, (9 / 16) * ph)
+    return { x: Math.round((w - pw) / 2), y: 30, w: Math.round(pw), h: Math.round(ph) }
+  }
+  type Rank = { data: Float32Array; w: number; h: number }
+  const rankAt = (r: Rank, x: number, y: number) => {
+    const i = Math.min(r.w - 1, Math.max(0, Math.floor(x / 2)))
+    const j = Math.min(r.h - 1, Math.max(0, Math.floor(y / 2)))
+    return r.data[j * r.w + i]!
+  }
+
   const d = createDetent<(typeof prints)[number]>(() => ({
+    onTick: ticks({ sound: true, haptics: true }),
     items: prints,
-    getKey: (p) => p.id,
+    getKey: (p) => p.src,
     getLabel: (p) => p.label,
-    label: 'Prints',
-    loop: true,
     itemSize: PITCH,
-    visibleCount: 3,
-    onSettle: (_, i) => (index = i),
+    visibleCount: 5,
+    loop: true,
+    label: 'Prints',
   }))
 
   let canvas = $state<HTMLCanvasElement | null>(null)
 
-  interface Screen { x: Float32Array; y: Float32Array; thr: Float32Array; r: Float32Array[] }
-
-  /** One halftone lattice at `deg`, with the ink radius of each dot for every print. */
-  function lattice(deg: number, ink: (rgb: Uint8ClampedArray, i: number) => number, pix: Uint8ClampedArray[]): Screen {
-    const a = (deg * Math.PI) / 180
-    const cos = Math.cos(a)
-    const sin = Math.sin(a)
-    const xs: number[] = []
-    const ys: number[] = []
-    const reach = Math.hypot(PW, PH)
-    for (let v = -reach; v <= reach; v += CELL)
-      for (let u = -reach; u <= reach; u += CELL) {
-        const x = PW / 2 + u * cos - v * sin
-        const y = PH / 2 + u * sin + v * cos
-        if (x >= 0 && x < PW && y >= 0 && y < PH) (xs.push(x), ys.push(y))
-      }
-    const n = xs.length
-    const thr = new Float32Array(n)
-    // A fixed hash per dot decides when it swaps during a dissolve.
-    for (let i = 0; i < n; i++) thr[i] = ((Math.sin(i * 12.9898 + deg) * 43758.5453) % 1 + 1) % 1
-    const r = pix.map((p) => {
-      const out = new Float32Array(n)
-      for (let i = 0; i < n; i++) {
-        const k = (Math.floor(ys[i]!) * PW + Math.floor(xs[i]!)) * 4
-        // radius from ink coverage: area ∝ r², so r = √coverage × the half-diagonal of a cell
-        out[i] = Math.sqrt(Math.min(1, Math.max(0, ink(p, k)))) * CELL * 0.7
-      }
-      return out
-    })
-    return { x: Float32Array.from(xs), y: Float32Array.from(ys), thr, r }
-  }
-
   $effect(() => {
     const cv = canvas
     if (!cv) return
-    const dpr = Math.min(2, window.devicePixelRatio || 1)
-    cv.width = W * dpr
-    cv.height = H * dpr
-    const g = cv.getContext('2d')!
-    let screens: { pink: Screen; blue: Screen } | null = null
-    let alive = true
-    let last: Pick<DetentFrame, 'offset' | 'velocity'> = { offset: d.engine.x / PITCH, velocity: 0 }
-    const smooth = (a: number, b: number, x: number) => {
-      const t = Math.min(1, Math.max(0, (x - a) / (b - a)))
-      return t * t * (3 - 2 * t)
-    }
+    const ctx = cv.getContext('2d')!
+    let images: HTMLImageElement[] = []
+    let ranks: Rank[] = []
+    let frame = { offset: d.engine.x / PITCH, velocity: 0 }
+    const mono = getComputedStyle(document.body).getPropertyValue('--font-geist-mono').trim() || "'Geist Mono', ui-monospace, monospace"
 
-    const draw = (f: Pick<DetentFrame, 'offset' | 'velocity'>) => {
-      last = f
-      g.setTransform(dpr, 0, 0, dpr, 0, 0)
-      g.globalCompositeOperation = 'source-over'
-      g.fillStyle = PAPER
-      g.fillRect(0, 0, W, H)
-      if (!screens) return
-      const a = Math.floor(f.offset)
-      const t = f.offset - a
-      const A = mod(a, N)
-      const B = mod(a + 1, N)
-      // Speed pulls the plates apart along the scroll axis.
-      const slip = Math.max(-9, Math.min(9, f.velocity * 4))
-      g.save()
-      g.beginPath()
-      g.rect(PX, PY, PW, PH)
-      g.clip()
-      g.globalCompositeOperation = 'multiply'
-      const plate = (s: Screen, color: string, dy: number) => {
-        g.fillStyle = color
-        g.beginPath()
-        for (let i = 0; i < s.x.length; i++) {
-          const m = t <= 0 ? 0 : smooth(s.thr[i]! - 0.12, s.thr[i]! + 0.12, t * 1.24 - 0.12)
-          const r = s.r[A]![i]! * (1 - m) + s.r[B]![i]! * m
-          if (r < 0.25) continue
-          const cx = PX + s.x[i]!
-          const cy = PY + s.y[i]! + dy
-          g.moveTo(cx + r, cy)
-          g.arc(cx, cy, r, 0, Math.PI * 2)
-        }
-        g.fill()
+    const draw = () => {
+      const w = cv.clientWidth
+      const h = cv.clientHeight
+      const night = isDark()
+      const inks = night ? dark : light
+      ctx.globalCompositeOperation = 'source-over'
+      ctx.fillStyle = night ? '#121110' : '#f4f0e8'
+      ctx.fillRect(0, 0, w, h)
+      if (!ranks.length) return
+      const f = frameOf(w, h)
+      const { offset, velocity } = frame
+      const i0 = Math.floor(offset)
+      const k = offset - i0
+      const a = ranks[mod(i0, ranks.length)]!
+      const b = ranks[mod(i0 + 1, ranks.length)]!
+      const v = Math.max(-3, Math.min(3, velocity))
+      ctx.globalCompositeOperation = night ? 'screen' : 'multiply'
+      const R = Math.hypot(f.w, f.h) / 2 + 4
+      const cx = f.x + f.w / 2
+      const cy = f.y + f.h / 2
+      for (const plate of inks) {
+        // Speed pulls the plates apart, each its own way: out of register.
+        const dx = plate.dir * v * 3
+        const dy = plate.dir * v * 9
+        const cos = Math.cos(plate.angle)
+        const sin = Math.sin(plate.angle)
+        ctx.fillStyle = plate.ink
+        ctx.beginPath()
+        for (let u = -R; u <= R; u += 4)
+          for (let s = -R; s <= R; s += 4) {
+            const x = cx + u * cos - s * sin
+            const y = cy + u * sin + s * cos
+            if (x < f.x || y < f.y || x > f.x + f.w || y > f.y + f.h) continue
+            // The next print arrives from the top down, as a soft edge.
+            const t = smooth(1.6 * k - ((y - f.y) / f.h) * 0.6)
+            const rank = rankAt(a, x - f.x, y - f.y) * (1 - t) + rankAt(b, x - f.x, y - f.y) * t
+            const r = 2.24 * Math.sqrt(Math.pow(night ? 1 - rank : rank, plate.gamma) * plate.gain)
+            if (r < 0.35) continue
+            ctx.moveTo(x + dx + r, y + dy)
+            ctx.arc(x + dx, y + dy, r, 0, 2 * Math.PI)
+          }
+        ctx.fill()
       }
-      plate(screens.pink, PINK, -slip)
-      plate(screens.blue, BLUE, slip)
-      g.restore()
+      ctx.globalCompositeOperation = 'source-over'
+      const n = mod(Math.round(offset), prints.length)
+      ctx.fillStyle = night ? 'rgb(240 236 228 / 0.7)' : 'rgb(20 20 20 / 0.7)'
+      ctx.font = `600 10px ${mono}`
+      ctx.textBaseline = 'alphabetic'
+      ctx.textAlign = 'left'
+      const lx = f.x + f.w + 18
+      ctx.fillText(`${String(n + 1).padStart(2, '0')} / ${String(prints.length).padStart(2, '0')}`, lx, f.y + f.h)
+      ctx.fillText('MIST', lx, f.y + 10)
+      ctx.fillStyle = inks[0]!.ink
+      ctx.fillRect(lx, f.y + f.h - 34, 10, 10)
+      ctx.fillStyle = inks[1]!.ink
+      ctx.fillRect(lx + 14, f.y + f.h - 34, 10, 10)
     }
-    const off = d.subscribe(draw)
-    draw(last)
 
-    // Read each photo once, at print size, and turn it into dot radii for the two screens.
+    /** A print as a rank map at half resolution: 0 for its darkest pixel to 1 for its lightest. */
+    const rank = (img: HTMLImageElement, w: number, h: number): Rank => {
+      const rw = Math.max(1, Math.ceil(w / 2))
+      const rh = Math.max(1, Math.ceil(h / 2))
+      const c = document.createElement('canvas')
+      c.width = rw
+      c.height = rh
+      const g = c.getContext('2d', { willReadFrequently: true })!
+      const cover = Math.max(rw / img.naturalWidth, rh / img.naturalHeight)
+      g.drawImage(img, (rw - img.naturalWidth * cover) / 2, (rh - img.naturalHeight * cover) / 2, img.naturalWidth * cover, img.naturalHeight * cover)
+      const px = g.getImageData(0, 0, rw, rh).data
+      const lum = new Float32Array(rw * rh)
+      for (let i = 0; i < lum.length; i++) lum[i] = 1 - (0.2126 * px[4 * i]! + 0.7152 * px[4 * i + 1]! + 0.0722 * px[4 * i + 2]!) / 255
+      const order = Array.from(lum.keys()).sort((p, q) => lum[p]! - lum[q]!)
+      order.forEach((p, i) => void (lum[p] = i / (order.length - 1)))
+      return { data: lum, w: rw, h: rh }
+    }
+    const rebuild = () => {
+      const w = cv.clientWidth
+      const h = cv.clientHeight
+      if (!images.length || !w || !h) return draw()
+      const f = frameOf(w, h)
+      ranks = images.map((img) => rank(img, f.w, f.h))
+      draw()
+    }
+
+    let alive = true
     Promise.all(
       prints.map(
         (p) =>
-          new Promise<HTMLImageElement>((resolve, reject) => {
+          new Promise<HTMLImageElement>((done) => {
             const img = new Image()
+            img.decoding = 'async'
+            // A canvas read of a cross-origin photo needs the host's permission to be read back.
             img.crossOrigin = 'anonymous'
-            img.onload = () => resolve(img)
-            img.onerror = reject
-            img.src = p.src
+            img.onload = img.onerror = () => done(img)
+            img.src = base + p.src
           }),
       ),
-    ).then((imgs) => {
+    ).then((loaded) => {
       if (!alive) return
-      const c = document.createElement('canvas')
-      c.width = PW
-      c.height = PH
-      const x = c.getContext('2d', { willReadFrequently: true })!
-      const pix = imgs.map((img) => {
-        // cover-fit
-        const s = Math.max(PW / img.naturalWidth, PH / img.naturalHeight)
-        x.clearRect(0, 0, PW, PH)
-        x.drawImage(img, (PW - img.naturalWidth * s) / 2, (PH - img.naturalHeight * s) / 2, img.naturalWidth * s, img.naturalHeight * s)
-        return x.getImageData(0, 0, PW, PH).data
-      })
-      const lum = (p: Uint8ClampedArray, k: number) => (0.3 * p[k]! + 0.59 * p[k + 1]! + 0.11 * p[k + 2]!) / 255
-      // Each photo is stretched to its own tonal range first, so a dark one prints as lightly as a pale one.
-      const range = pix.map((p) => {
-        const hist = new Uint32Array(256)
-        for (let k = 0; k < p.length; k += 4) hist[Math.round(lum(p, k) * 255)]!++
-        const at = (q: number) => {
-          let n = 0
-          for (let i = 0; i < 256; i++) if ((n += hist[i]!) >= q * (PW * PH)) return i / 255
-          return 1
-        }
-        return [at(0.03), Math.max(at(0.97), at(0.03) + 0.1)] as const
-      })
-      const tone = (p: Uint8ClampedArray, k: number) => {
-        const [lo, hi] = range[pix.indexOf(p)]!
-        return Math.min(1, Math.max(0, (lum(p, k) - lo) / (hi - lo)))
-      }
-      screens = {
-        // Pink carries the body of the picture; blue carries the shadows.
-        pink: lattice(15, (p, k) => Math.pow(1 - tone(p, k), 1.15) * 0.78, pix),
-        blue: lattice(75, (p, k) => Math.pow(Math.max(0, 0.55 - tone(p, k)) / 0.55, 1.3) * 0.95, pix),
-      }
-      draw(last)
+      images = loaded.filter((img) => img.naturalWidth > 0)
+      rebuild()
     })
-    return () => ((alive = false), off())
+    const stopSize = watchCanvas(cv, rebuild)
+    const stopTheme = onTheme(draw)
+    const stopFrames = d.subscribe((f) => {
+      frame = { offset: f.offset, velocity: f.mode === 'idle' ? 0 : f.velocity }
+      draw()
+    })
+    return () => {
+      alive = false
+      stopSize()
+      stopTheme()
+      stopFrames()
+    }
   })
 </script>
 
-<div class="riso">
-  <div class="stage" {...d.rootAttrs} style={d.rootStyle + `width:${W}px;height:${H}px;touch-action:pan-x`} {@attach d.attachRoot}>
+<div class="stage">
+  <div {...d.rootAttrs} class="root" style="{d.rootStyle}width:100%" {@attach d.attachRoot}>
     <div {...d.trackAttrs} style={d.trackStyle} {@attach d.attachTrack}>
       {#each d.rows as r (r.key)}
-        <div {...r.attrs} style={r.style} aria-label={r.item.label} class="row">{r.item.label}</div>
+        <div {...r.attrs} class="row" style={r.style}>{r.item.label}</div>
       {/each}
     </div>
-    <canvas bind:this={canvas} aria-hidden="true"></canvas>
+    <canvas bind:this={canvas} class="canvas" aria-hidden="true"></canvas>
   </div>
-  <span class="tag">MIST</span>
-  <span class="inks" aria-hidden="true"><i style="background:{PINK}"></i><i style="background:{BLUE}"></i></span>
-  <span class="count">{String(index + 1).padStart(2, '0')} / {String(N).padStart(2, '0')}</span>
-  <div class="dots" aria-hidden="true">
-    {#each prints as p, i (p.id)}<i class:on={i === index}></i>{/each}
-  </div>
+  <FxDots count={prints.length} index={d.selectedIndex} variant="riso" />
   <div {...d.liveRegionAttrs} style={d.liveRegionStyle}>{d.announcement}</div>
 </div>
 
 <style>
-  .riso { position: relative; width: 520px; max-width: 100%; height: 460px; margin: 0 auto; border-radius: 16px; overflow: hidden; background: #f2eee6; font: 10px/1 ui-monospace, monospace; letter-spacing: 0.04em; color: #222; }
-  .stage { cursor: grab; outline: none; }
-  .stage:active { cursor: grabbing; }
-  .row { opacity: 0; pointer-events: none; }
-  canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
-  .tag { position: absolute; left: 384px; top: 30px; }
-  .inks { position: absolute; left: 384px; bottom: 44px; display: flex; gap: 3px; }
-  .inks i { width: 8px; height: 8px; }
-  .count { position: absolute; left: 384px; bottom: 28px; }
-  .dots { position: absolute; right: 14px; top: 50%; transform: translateY(-50%); display: grid; gap: 6px; justify-items: center; }
-  .dots i { width: 5px; height: 5px; border-radius: 99px; background: #c9c3b6; transition: height 0.2s, background 0.2s; }
-  .dots i.on { height: 16px; background: #222; }
-  @media (prefers-color-scheme: dark) { .riso { color: #ddd; } }
+  .stage { --fg: #0a0a0a; background: #f4f0e8; border-radius: 16px; width: 100%; position: relative; overflow: hidden; box-shadow: inset 0 0 0 0.5px #0000001a; }
+  .root { cursor: grab; outline: none; position: relative; }
+  .root:focus-visible { border-radius: 16px; box-shadow: inset 0 0 0 1.5px #00000073; }
+  .root[data-dragging] { cursor: grabbing; }
+  .row { opacity: 0; place-items: center; display: grid; }
+  .canvas { pointer-events: none; width: 100%; height: 100%; position: absolute; inset: 0; }
+  @media (prefers-color-scheme: dark) {
+    .stage { --fg: #ededed; background: #121110; box-shadow: inset 0 0 0 0.5px #ffffff14; }
+    .root:focus-visible { box-shadow: inset 0 0 0 1.5px #ffffff80; }
+  }
 </style>

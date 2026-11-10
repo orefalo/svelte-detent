@@ -1,67 +1,68 @@
 <script lang="ts">
-  // In your app: import { Detent } from '@hayderkg/detent-svelte'
+  // In your app: import { Detent } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
   import { Detent } from '../../src/lib'
 
+  const tick = ticks({ sound: true, haptics: true })
   const colors = [
-    { name: 'Ember', hex: '#f4512c' },
-    { name: 'Saffron', hex: '#f5a623' },
-    { name: 'Moss', hex: '#6b9b6e' },
-    { name: 'Lagoon', hex: '#2a9d9d' },
-    { name: 'Cobalt', hex: '#3b5bff' },
-    { name: 'Iris', hex: '#8b5cf6' },
-    { name: 'Orchid', hex: '#e879f9' },
-    { name: 'Rose', hex: '#fb5c8a' },
+    { name: 'Ember', hex: '#ff5a1f' },
+    { name: 'Saffron', hex: '#f5b700' },
+    { name: 'Moss', hex: '#5b8c3a' },
+    { name: 'Lagoon', hex: '#0f9d9a' },
+    { name: 'Cobalt', hex: '#2f5bff' },
+    { name: 'Iris', hex: '#7c5cff' },
+    { name: 'Orchid', hex: '#d946ef' },
+    { name: 'Rose', hex: '#f43f5e' },
   ]
-  let value = $state(colors[4]!)
-  let card: HTMLElement | undefined
 
-  /** Every frame: blend the two colors around the center and tint the surface behind the wheel. No re-render. */
-  function tint(position: number) {
-    const i = Math.max(0, Math.min(colors.length - 1, Math.floor(position)))
-    const next = Math.min(colors.length - 1, i + 1)
-    const t = Math.max(0, Math.min(1, position - i)) * 100
-    card?.style.setProperty('--tint', `color-mix(in oklab, ${colors[i]!.hex}, ${colors[next]!.hex} ${t.toFixed(1)}%)`)
+  /** The color at a fractional position: a blend of the two neighbours. */
+  const blend = (position: number) => {
+    const a = Math.max(0, Math.min(colors.length - 1, Math.floor(position)))
+    const b = Math.min(colors.length - 1, a + 1)
+    const pct = Math.round(100 * Math.max(0, Math.min(1, position - a)))
+    return `color-mix(in oklab, ${colors[a]!.hex}, ${colors[b]!.hex} ${pct}%)`
   }
-  // The first frame, before any motion.
-  const start = (el: HTMLElement) => {
-    card = el
-    tint(colors.findIndex((c) => c.name === value.name))
+  /** The surface behind the wheel: a faint wash of the color at the center and the one after it. */
+  const wash = (position: number) =>
+    `linear-gradient(160deg, color-mix(in oklab, ${blend(position)} 9%, var(--bg, white)), color-mix(in oklab, ${blend(position + 1)} 6%, var(--bg, white)))`
+  /** The swatch of a row: its color, lit from above, drifting toward the next one. */
+  const swatch = (i: number) => {
+    const here = colors[i]!.hex
+    const next = colors[Math.min(colors.length - 1, i + 1)]!.hex
+    return `linear-gradient(160deg, color-mix(in oklab, ${here} 82%, white), color-mix(in oklab, ${here} 72%, ${next}))`
   }
+
+  let surface: HTMLElement | undefined = $state()
 </script>
 
-<div class="card" {@attach start}>
-  <div class="wheel">
-    <Detent
-      items={colors}
-      bind:value
-      getKey={(c) => c.name}
-      getLabel={(c) => c.name}
-      label="Color"
-      width={220}
-      itemHeight={48}
-      visibleCount={5}
-      curvature={0.65}
-      fade={0.14}
-      align="start"
-      magnify={false}
-      onScrollProgress={tint}
-      indicator={{ shape: 'rounded', background: 'color-mix(in oklab, var(--tint) 14%, transparent)' }}
-    >
-      {#snippet item(c)}
-        <span class="row"><i style:background={c.hex}></i>{c.name}</span>
-      {/snippet}
-    </Detent>
-  </div>
+<!-- The original paints the whole card; here the example brings its own box. -->
+<div class="frame" bind:this={surface} style:background={wash(4)}>
+  <Detent
+    onTick={tick}
+    curvature={0.65}
+    fade={0.14}
+    dim={0}
+    items={colors}
+    getKey={(c) => c.name}
+    getLabel={(c) => c.name}
+    defaultValue={colors[4]}
+    label="Color"
+    itemHeight={48}
+    visibleCount={5}
+    width={220}
+    align="start"
+    magnify={false}
+    onScrollProgress={(position) => surface?.style.setProperty('background', wash(position))}
+  >
+    {#snippet item(c, { index })}
+      <span class="row"><span class="swatch" aria-hidden="true" style:background={swatch(index)}></span>{c.name}</span>
+    {/snippet}
+  </Detent>
 </div>
 
 <style>
-  .card {
-    --tint: #3b5bff;
-    display: grid; place-items: center; min-height: 230px; width: 100%; padding: 0; border-radius: 12px;
-    background: color-mix(in oklab, var(--tint) 10%, white);
-  }
-  .wheel { padding: 0; }
-  .row { display: flex; align-items: center; gap: 12px; font-size: 15px; padding-inline: 8px; }
-  i { display: block; width: 16px; height: 16px; border-radius: 5px; }
-  @media (prefers-color-scheme: dark) { .card { background: color-mix(in oklab, var(--tint) 16%, #111); } }
+  .frame { --bg: #fff; position: relative; display: grid; place-items: center; width: 100%; min-height: 252px; border-radius: 12px; overflow: hidden; }
+  .row { display: flex; align-items: center; gap: 12px; font-size: 16px; }
+  .swatch { width: 22px; height: 22px; border-radius: 7px; box-shadow: inset 0 0 0 1px rgb(128 128 128 / 0.2); }
+  @media (prefers-color-scheme: dark) { .frame { --bg: #0a0a0a; } }
 </style>

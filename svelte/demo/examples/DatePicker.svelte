@@ -1,43 +1,40 @@
 <script lang="ts">
-  // In your app: import { Detent } from '@hayderkg/detent-svelte'
-  import { Detent } from '../../src/lib'
+  // In your app: import { Detent, DetentNumber, DetentText } from 'svelte-detent'
+  import { ticks } from '@hayderkg/detent/feedback'
+  import { Detent, DetentNumber, DetentText } from '../../src/lib'
 
-  const months = Array.from({ length: 12 }, (_, i) => new Intl.DateTimeFormat('en-US', { month: 'long' }).format(new Date(2000, i, 1)))
-  const years = Array.from({ length: 151 }, (_, i) => 1950 + i)
+  const tick = ticks({ sound: true, haptics: true })
+  const months = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December']
+  const days = Array.from({ length: 31 }, (_, i) => i + 1)
+  const years = Array.from({ length: 101 }, (_, i) => 1950 + i)
+  const long = new Intl.DateTimeFormat('en-US', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
 
-  let year = $state(2026)
-  let month = $state('February')
   let day = $state(14)
-
-  const monthIndex = $derived(months.indexOf(month))
-  // Days that don't exist in the chosen month are skipped.
-  const daysIn = $derived(new Date(year, monthIndex + 1, 0).getDate())
-  const days = $derived(Array.from({ length: daysIn }, (_, i) => i + 1))
-  // A shorter month takes the day with it (31 → 28), instead of leaving it on a day that is gone.
-  $effect(() => {
-    if (day > daysIn) day = daysIn
-  })
-
-  const text = $derived(
-    new Intl.DateTimeFormat('en-US', { dateStyle: 'full' }).format(new Date(year, monthIndex, Math.min(day, daysIn))),
-  )
-
-  const common = { itemHeight: 38, visibleCount: 5, highlight: false, magnify: false } as const
+  let month = $state(1)
+  let year = $state(2026)
+  /** Days in the chosen month; the day follows it down (31 Jan -> 28 Feb) but is remembered when you go back up. */
+  const inMonth = $derived(new Date(year, month + 1, 0).getDate())
+  const shown = $derived(Math.min(day, inMonth))
+  const date = $derived(new Date(year, month, shown))
+  const parts = $derived(long.formatToParts(date))
 </script>
 
-<div class="card">
+<div class="date">
   <div class="wheels">
-    <div class="band"></div>
-    <div style="width: 60px"><Detent {...common} items={days} bind:value={day} label="Day" align="end" /></div>
-    <div style="width: 150px"><Detent {...common} items={months} bind:value={month} label="Month" /></div>
-    <div style="width: 90px"><Detent {...common} items={years} bind:value={year} label="Year" align="start" /></div>
+    <div class="band" aria-hidden="true"></div>
+    <Detent onTick={tick} itemHeight={38} visibleCount={5} indicator={{ shape: 'none' }} magnify={1.08} curvature={0.7}
+      items={days} value={shown} onChange={(d: number) => (day = d)} isDisabled={(d: number) => d > inMonth} label="Day" align="end" style="flex:2" />
+    <Detent onTick={tick} itemHeight={38} visibleCount={5} indicator={{ shape: 'none' }} magnify={1.08} curvature={0.7}
+      items={months} value={months[month]} onChange={(m: string) => (month = months.indexOf(m))} label="Month" style="flex:5" />
+    <Detent onTick={tick} itemHeight={38} visibleCount={5} indicator={{ shape: 'none' }} magnify={1.08} curvature={0.7}
+      items={years} value={year} onChange={(y: number) => (year = y)} label="Year" align="start" style="flex:3" />
   </div>
-  <p class="out" aria-live="polite">{text}</p>
+  <output aria-label={long.format(date)}>{#each parts as p, i (`${p.type}-${i}`)}{#if p.type === 'day' || p.type === 'year'}<DetentNumber value={Number(p.value)} locales="en-US" format={{ useGrouping: false }} />{:else if p.type === 'weekday' || p.type === 'month'}<DetentText text={p.value} />{:else}{p.value}{/if}{/each}</output>
 </div>
 
 <style>
-  .card { display: grid; justify-items: center; gap: 18px; padding: 22px 0; }
-  .wheels { position: relative; display: flex; font-size: 19px; }
-  .band { position: absolute; left: 0; right: 0; top: 76px; height: 38px; border-radius: 10px; background: rgb(128 128 128 / 0.12); pointer-events: none; }
-  .out { margin: 0; font-size: 14px; font-weight: 500; }
+  .date { display: grid; justify-items: center; gap: 16px; width: 100%; }
+  .wheels { position: relative; display: flex; width: min(300px, 100%); --detent-font-size: 19px; }
+  .band { position: absolute; inset: 76px 0 auto; height: 38px; border-radius: 10px; background: rgb(128 128 128 / 0.12); }
+  output { font-size: 14px; }
 </style>

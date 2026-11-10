@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- **Svelte 5**: new package `@hayderkg/detent-svelte` (`svelte/`) with `<Detent>`, `<DetentText>`, `<DetentNumber>`
+- **Svelte 5**: new package `svelte-detent` (`svelte/`) with `<Detent>`, `<DetentText>`, `<DetentNumber>`
   and the headless `createDetent`. Same engine, physics, props and accessibility as the React components; rows,
   header, footer and indicator content are snippets, `value` is `bind:`able.
 - New framework-free entry `@hayderkg/detent/core` (physics, engine, presets, rolling-label controllers). React and

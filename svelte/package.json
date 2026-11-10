@@ -1,5 +1,5 @@
 {
-  "name": "@hayderkg/detent-svelte",
+  "name": "svelte-detent",
   "version": "0.1.1",
   "description": "A wheel picker for Svelte 5 that clicks into place.",
   "license": "MIT",

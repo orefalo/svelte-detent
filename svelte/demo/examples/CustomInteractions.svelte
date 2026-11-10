@@ -1,5 +1,5 @@
 <script lang="ts">
-  // In your app: import { createDetent } from '@hayderkg/detent-svelte'
+  // In your app: import { createDetent } from 'svelte-detent'
   import { createDetent, type DetentFrame } from '../../src/lib'
 
   // "Liquid", CSS flavour. Every frame, `subscribe` reports where the wheel is and how fast it moves; this

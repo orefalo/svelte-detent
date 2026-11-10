@@ -81,6 +81,14 @@ interface Config<T> {
  */
 export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null, track: () => HTMLElement | null, cfg: () => Config<T>) {
   const sizes = new Map<Key, { w: number; h: number }>()
+  // What was last written to the root: an unchanged variable is not written again (each write restyles the wheel).
+  const written = new Map<string, string>()
+  let writtenTo: HTMLElement | null = null
+  const put = (el: HTMLElement, name: string, value: string) => {
+    if (written.get(name) === value) return
+    written.set(name, value)
+    el.style.setProperty(name, value)
+  }
   const s = { w: NaN, h: NaN, cp: NaN, wFrom: NaN, hFrom: NaN, cFrom: '', motion: NaN, held: 0, t: 0, rem0: NaN }
 
   const apply = (f: DetentFrame) => {
@@ -188,12 +196,12 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
 
     st.w = w
     st.h = h
-    const css = el.style
-    if (content && !isNaN(w) && w > 0) css.setProperty('--indicator-w', `${w}px`)
-    if (content && o.fitHeight && !isNaN(h)) css.setProperty('--indicator-h', `${h}px`)
-    if (color) css.setProperty('--indicator-color', color)
-    css.setProperty('--indicator-progress', String(Math.round(clamp(progress, 0, 2) * 1e3) / 1e3))
-    css.setProperty('--indicator-velocity', String(Math.round(f.velocity * 1e3) / 1e3))
+    if (el !== writtenTo) (written.clear(), (writtenTo = el))
+    if (content && !isNaN(w) && w > 0) put(el, '--indicator-w', `${w}px`)
+    if (content && o.fitHeight && !isNaN(h)) put(el, '--indicator-h', `${h}px`)
+    if (color) put(el, '--indicator-color', color)
+    put(el, '--indicator-progress', String(Math.round(clamp(progress, 0, 2) * 1e3) / 1e3))
+    put(el, '--indicator-velocity', String(Math.round(f.velocity * 1e3) / 1e3))
   }
 
   const now = (): DetentFrame => ({ offset: d.engine.x / (cfg().pitch || 1), velocity: d.engine.v, mode: d.engine.mode, target: d.engine.target, from: d.engine.from })
@@ -203,7 +211,8 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
   $effect(() => {
     cfg()
     root()
-    untrack(() => apply(now()))
+    // Options changed (or the root's style was rewritten): write everything again.
+    untrack(() => (written.clear(), apply(now())))
   })
 
   // A short, interruptible response of the marker only; it never changes content size or selection.
@@ -299,7 +308,7 @@ export function useIndicator<T>(d: DetentApi<T>, root: () => HTMLElement | null,
       if (!seen.has(el)) seen.add(el), r.observe(el)
   })
 
-  return { state: s, apply: () => apply(now()) }
+  return { state: s, apply: () => (written.clear(), apply(now())) }
 }
 
 /** Static styles for the indicator box (shape × material); sizes come from --indicator-w / --indicator-h. */
