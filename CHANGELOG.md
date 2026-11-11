@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 Brought over from upstream `@hayderkg/detent` 0.1.2 to 0.1.4:
 

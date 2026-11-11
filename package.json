@@ -1,6 +1,6 @@
 {
   "name": "svelte-detent",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A wheel picker for Svelte 5 that clicks into place.",
   "keywords": [
     "ios",
