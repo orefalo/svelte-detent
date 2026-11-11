@@ -150,7 +150,7 @@ Everything from `createDetent` (below), plus the visual props. Each falloff is a
 | width / height | 100% / 64 | Cross size: width when vertical, height when horizontal |
 | orientation | 'vertical' | or 'horizontal' |
 | loop | false | Infinite: wraps around (header, footer and loading rows are ignored) |
-| header / footer | | Snippets: non-selectable rows the wheel can rest on |
+| header / footer | | Snippets: rows the wheel can rest on but never selects. They are not options (`role="presentation"`), so a screen reader never hears them announced as selected |
 | loadingRow, loading | | A snippet, shown after the items while `loading` is true |
 | emptyState | | A snippet, shown when there are no items (and no header) |
 
@@ -290,7 +290,7 @@ The headless function: physics, input, virtualization and accessibility, no styl
 | dragThreshold / dragRatio | 5 / 1 | px before a drag starts; drag distance multiplier |
 | overscan | 3 | Rows rendered beyond the visible ones |
 | onTick, onSettle, onSpinStart, onSpinEnd, onScrollProgress | | Events |
-| onEndReached, endReachedThreshold | 5 | Load more when within this many rows of the end |
+| onEndReached, endReachedThreshold | 5 | Load more when the wheel moves within this many rows of the end: not as it mounts there or as rows come in. Once per list length, and again after `loading` ends without new rows |
 
 **Mouse wheels.** `wheelMode: 'auto'` tells a notched mouse wheel from a trackpad by the first event of a gesture. Each notch moves exactly one row (`wheelStep`); the accelerated bursts of a fast spin (or a free-spinning wheel) become velocity, so the wheel moves continuously while they come and coasts briefly once they stop. Trackpads keep 1:1 tracking with momentum. `'step'` makes every wheel event one notch, whatever its size: never a throw, and a fast spin moves one row per event. `'smooth'` follows every delta 1:1, like native scrolling. In every mode the wheel lands on a row when the events stop.
 
@@ -333,7 +333,7 @@ Rows also carry the live CSS variables, so a drum is plain CSS:
 
 Matching graphemes remain in place; changes roll on Detent's spring physics. `morph={false}` rolls the entire label. Typography is inherited, and the component returns to native text at rest. It supports `as`, `class`, `style` (a string or an object), HTML/ARIA attributes and a bindable `ref`. In `style`, `position: static` becomes `relative` and `display: inline` or `contents` becomes `inline-block`: the rolling layer needs a positioned box of its own. The label is measured when its text, `class`, `style`, `lang` or `dir` changes, when it resizes and when a font loads; if an ancestor restyles its letters without changing its size, remount it with `{#key}`. Reduced motion is always respected, and there are no gesture handlers or Svelte updates per frame.
 
-Use `spring` for a partial spring configuration, `snapDuration` for the maximum settling time (550 ms by default), `rollDirection="down"` to reverse the roll, and `animate={false}` for immediate updates. Letters that appear are in place at once; set `reveal` to have them grow in from zero width. The lifecycle callbacks are `onAnimationStart`, `onAnimationComplete` and `onAnimationCancel`. Set `aria-live="polite"` only when the label should announce updates.
+Use `spring` for a partial spring configuration, `snapDuration` for the maximum settling time (550 ms by default), `rollDirection="down"` to reverse the roll, and `animate={false}` for immediate updates. The lifecycle callbacks are `onAnimationStart`, `onAnimationComplete` and `onAnimationCancel`. Set `aria-live="polite"` only when the label should announce updates.
 
 This version targets short, single-line LTR text. Multiline, RTL/bidirectional and vertical text update natively without animation. Long labels roll as a whole. Numbers are converted to strings and match by character; for digits that roll by decimal place, use `DetentNumber`.
 

@@ -15,13 +15,13 @@ export default defineConfig({
       },
       {
         // Components in a (simulated) browser: Svelte's client build.
-        plugins: [svelte({ hot: false })],
+        plugins: [svelte()],
         resolve: { conditions: ['browser'] },
         test: { name: 'client', environment: 'happy-dom', include: ['test/**/*.svelte.test.ts'] },
       },
       {
         // Server rendering: Svelte's server build, no DOM.
-        plugins: [svelte({ hot: false })],
+        plugins: [svelte()],
         test: { name: 'server', environment: 'node', include: ['test/ssr.test.ts'] },
       },
     ],

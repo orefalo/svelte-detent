@@ -152,7 +152,6 @@ Animates short interface labels (a button's state, a counter, a status) with the
 | ---------------------------------------------------------------- | ------------------------------------------ | ------------------------------------------------------- |
 | `text`                                                           | required                                   | Current string or number                                |
 | `morph`                                                          | `true`                                     | Keep matching graphemes; `false` rolls the whole label  |
-| `reveal`                                                         | `false`                                    | New letters grow in from zero width                     |
 | `animate`                                                        | `true`                                     | `false` for immediate updates                           |
 | `spring`                                                         | `{ stiffness: 420, damping: 32, mass: 1 }` | Partial spring configuration                            |
 | `snapDuration`                                                   | `550`                                      | Maximum spring duration, in ms                          |

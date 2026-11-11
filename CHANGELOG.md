@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+Brought over from upstream `@hayderkg/detent` 0.1.2 to 0.1.4:
+
+- `changeOn="tick"` reports every row live only while a hand turns the wheel (drag, throw, mouse wheel, trackpad).
+  Turns from keys, a tap on a row, `scrollTo` or a new `value` report only where they land, so a parent's own value
+  no longer comes back through `onChange` with every row on the way. The engine exposes it as `byHand`.
+- Header and footer rows are no longer options (`role="presentation"`), and `aria-activedescendant` is unset while
+  the wheel rests on one.
+- `onEndReached` fires only when the wheel moves near the end, not as it mounts there or as rows come in. After a
+  load that ends without new rows, it asks again the next time the wheel moves near the end.
+- `DetentText` and `DetentNumber`: glyphs are painted in fixed windows, so outgoing labels never show neighbouring
+  fragments and incoming letters roll in whole; removed text and number columns keep their spacing while the label
+  contracts; an unchanged digit stays still when an update lands during its overshoot; alignment is kept inside
+  centered buttons.
+- Removed: `DetentText`'s `reveal` prop (letters now always roll in whole, so it is no longer needed).
+
 ## 0.1.1
 
 - Fix: the tick-sound audio context now starts on the page's first gesture, so the first spin already clicks.

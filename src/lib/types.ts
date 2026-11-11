@@ -12,7 +12,11 @@ export interface DetentOptions<T> extends PhysicsOptions {
   value?: T
   defaultValue?: T
   onChange?: (item: T, index: number) => void
-  /** Fire onChange when the wheel settles (default), or live on every row that crosses the center. */
+  /**
+   * Fire onChange when the wheel settles (default), or live on every row that crosses the center while a hand
+   * turns it (drag, throw, mouse wheel, trackpad). Turns from keys, a tap on a row or a new `value` report only
+   * where they land, so a parent's own value never comes back through the rows on the way.
+   */
   changeOn?: 'settle' | 'tick'
   isDisabled?: (item: T, index: number) => boolean
   /** Row size in px along the scroll axis. */
@@ -56,7 +60,11 @@ export interface DetentOptions<T> extends PhysicsOptions {
   /** Continuous position in rows (float), every frame. */
   onScrollProgress?: (offset: number) => void
   onEndReached?: () => void
-  /** Rows from the end at which onEndReached fires. */
+  /**
+   * Rows from the end at which onEndReached fires, when the wheel moves that near the end (not as it mounts there
+   * or as rows come in): once per list length, and again after `loading` ends without new rows (a failed or empty
+   * load), the next time it moves there.
+   */
   endReachedThreshold?: number
 }
 

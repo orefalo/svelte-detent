@@ -9,8 +9,6 @@
     as?: 'span' | 'div' | 'p' | 'label' | 'strong' | 'em' | 'small' | 'output' | 'code' | 'pre' | 'h1' | 'h2' | 'h3' | 'h4' | 'h5' | 'h6'
     /** Keep matching graphemes; false rolls the entire label. Default true. */
     morph?: boolean
-    /** New letters grow in from zero width (so they look clipped while they roll). Default false: they arrive at full width and rise into place. */
-    reveal?: boolean
     /** Disable transitions. Reduced motion is always respected. */
     animate?: boolean
     /** Locale used for grapheme segmentation; format numbers before passing them if needed. */
@@ -34,7 +32,6 @@
     text,
     as = 'span',
     morph = true,
-    reveal = false,
     animate = true,
     locale,
     spring,
@@ -71,7 +68,6 @@
   $effect(() => {
     const options: TextOptions = {
       morph,
-      reveal,
       animate,
       locale,
       rollDirection,

@@ -178,7 +178,9 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
       // allowed) renders normally.
       moving() ? flushSync(update) : update()
     }
-    if (!loop && o.onEndReached && n && c >= n - 1 - (o.endReachedThreshold ?? 5) && endFor !== n) {
+    // Only when the wheel moves near the end: not as it mounts there, nor as rows come in while it rests there
+    // (rows inserted above the centered one keep it near the end, and it would ask for page after page).
+    if (!committing && !loop && o.onEndReached && n && c >= n - 1 - (o.endReachedThreshold ?? 5) && endFor !== n) {
       endFor = n
       o.onEndReached()
     }
@@ -202,7 +204,7 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
     const i = itemAt(L, j)
     if (i < 0) return
     o.onTick?.(i, v)
-    if (o.changeOn === 'tick' && enabled(L, j)) emit(i)
+    if (o.changeOn === 'tick' && engine.byHand && enabled(L, j)) emit(i)
   }
 
   function onSettle(j: number) {
@@ -255,6 +257,9 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
       if (r !== rtl) ((rtl = r), (redraw = true), update())
     }
     engine.set(engineOptions()) // a new row size rescales positions: the same rows stay centered
+    // A load that ended without new rows (it failed, or a page came back empty): ask again the next time the wheel
+    // nears its end, or it would stay stuck there for good.
+    if (prev.o.loading && !o.loading && next.n === prev.n) endFor = -1
     if (prev.keys !== keys) {
       const ci = loop ? mod(engine.index, prev.keys.length || 1) : engine.index
       if (ci >= 0 && ci < prev.keys.length) {
@@ -389,7 +394,8 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
       tabindex: o.disabled ? -1 : 0,
       'aria-label': o.label,
       'aria-orientation': vertical ? 'vertical' : 'horizontal',
-      'aria-activedescendant': n || head ? optionId(rest) : undefined,
+      // Only an option: resting on the header or footer (not options) leaves the listbox itself active.
+      'aria-activedescendant': itemAt(S, rest) >= 0 ? optionId(rest) : undefined,
       'aria-disabled': o.disabled || undefined,
       'data-detent': '',
       'data-state': 'idle',
@@ -425,8 +431,10 @@ export function createDetent<T>(options: () => DetentOptions<T>, id = `detent-${
       liveRegionAttrs: { role: 'status', 'aria-live': 'polite', 'aria-atomic': true } as Attrs,
       announcement: announce,
       rows,
-      header: head && shows(-1) ? slot(-1, 'option') : null,
-      footer: shows(footAt) ? slot(footAt, 'option') : null,
+      // Rows the wheel can rest on but never selects (a search field, a 'load more' button): not options, so a
+      // screen reader never hears them announced as selected, and their controls aren't nested in an option.
+      header: head && shows(-1) ? slot(-1, 'presentation') : null,
+      footer: shows(footAt) ? slot(footAt, 'presentation') : null,
       loadingRow: shows(loadAt) ? slot(loadAt, 'presentation', { 'aria-busy': true }) : null,
       selectedIndex,
       selectedItem: selectedIndex >= 0 ? o.items[selectedIndex] : undefined,
