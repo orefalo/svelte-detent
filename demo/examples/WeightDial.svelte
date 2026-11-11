@@ -61,6 +61,8 @@
           <g bind:this={ring} transform="rotate({-(STEP * selected)} 160 168)">
             {#each values as kg, i (kg)}
               {@const major = kg % 5 === 0}
+              <!-- Not reactive on purpose: only the per-frame callback reads these, to write attributes directly. -->
+              <!-- svelte-ignore binding_property_non_reactive -->
               <g bind:this={marks[i]} transform="rotate({STEP * i} 160 168)" visibility={Math.abs(i - selected) > REACH ? 'hidden' : undefined}>
                 <line x1="160" x2="160" y1="40" y2={40 + (major ? 22 : 12)} stroke="currentColor" stroke-width={major ? 2 : 1.25} stroke-linecap="round" opacity={major ? 0.9 : 0.35} />
                 {#if kg % 10 === 0}
