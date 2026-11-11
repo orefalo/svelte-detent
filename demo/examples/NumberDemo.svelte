@@ -1,7 +1,7 @@
 <script lang="ts">
   // In your app: import { DetentNumber } from 'svelte-detent'
   import { DetentNumber } from '../../src/lib'
-  import RecipeCode from '../site/RecipeCode.svelte'
+  import CodeSlot from '../site/CodeSlot.svelte'
 
   const tabs = ['Counter', 'Currency', 'Percentage'] as const
   type Tab = (typeof tabs)[number]
@@ -72,12 +72,11 @@
     <p class="rolling-caption">{captions[tab]}</p>
   </div>
 
-  <RecipeCode {code} tag="DetentNumber" attrs={['value', 'locales', 'format']} />
+  <CodeSlot {code} file="NumberDemo.svelte" />
 </div>
 
 <style>
   .value-recipe { --fg: #111; --bg: #fff; --muted: #888; --line: #ddd; --accent: #ff5a1f; width: 100%; min-width: 0; font-family: system-ui, sans-serif; }
-  .value-recipe > :global(.code) { margin-top: 14px; }
 
   .rolling-stage :global(.rolling-currency) { font-size: 0.55em; color: var(--muted); margin-inline: 0.05em; }
   .rolling-stage :global(.rolling-fraction) { font-size: 0.72em; }

@@ -2,7 +2,7 @@
   // In your app: import { DetentText } from 'svelte-detent'
   import { onDestroy } from 'svelte'
   import { DetentText } from '../../src/lib'
-  import RecipeCode from '../site/RecipeCode.svelte'
+  import CodeSlot from '../site/CodeSlot.svelte'
 
   const tabs = ['Button', 'Morphing', 'Custom'] as const
   type Tab = (typeof tabs)[number]
@@ -123,12 +123,11 @@
     <span class="status" role="status" aria-live="polite" aria-atomic="true">{announcement}</span>
   </div>
 
-  <RecipeCode {code} tag="DetentText" attrs={['text', 'morph']} />
+  <CodeSlot {code} file="TextDemo.svelte" />
 </div>
 
 <style>
   .recipe { --fg: #111; --bg: #fff; --muted: #888; --line: #ddd; --accent: #ff5a1f; width: 100%; min-width: 0; font-family: system-ui, sans-serif; }
-  .recipe > :global(.code) { margin-top: 14px; }
 
   .demo { display: grid; justify-items: center; width: 100%; gap: 16px; padding: 12px 0; }
   .toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; width: 100%; }

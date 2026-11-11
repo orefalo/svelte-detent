@@ -1,11 +1,28 @@
 <script lang="ts">
   import Header from './Header.svelte'
   import type { Component } from 'svelte'
+  import ExampleCode from './ExampleCode.svelte'
+  import Mount from './Mount.svelte'
   import { intro, sections } from './sections'
+  import { overrides, snippet } from './snippet'
 
   // Each example is its own chunk, mounted only while its card is near the viewport.
   const loaders = import.meta.glob('../examples/*.svelte', { import: 'default' }) as Record<string, () => Promise<Component>>
   const load = (file: string) => loaders[`../examples/${file}.svelte`]!()
+
+  // The code under each example: a snippet pulled from its source. Examples that bring their own code panel are skipped.
+  const sources = import.meta.glob('../examples/*.svelte', { query: '?raw', import: 'default' }) as Record<string, () => Promise<string>>
+  const codes = $state<Record<string, string>>({})
+  /** Code that follows an example's state (Detent text and number), handed up by the example itself. */
+  const live = $state<Record<string, string | null>>({})
+  $effect(() => {
+    for (const e of sections.flatMap((s) => s.examples)) {
+      void sources[`../examples/${e.file}.svelte`]?.().then((src) => {
+        const code = src.includes('CodeSlot') ? null : (overrides[e.file] ?? snippet(src))
+        if (code) codes[e.file] = code
+      })
+    }
+  })
 
   /**
    * Tells `set` whether the element is within 600px of the viewport. An example that scrolls far away is unmounted, which
@@ -56,9 +73,10 @@
           {/if}
           <div class="card" class:bare={e.bare} use:near={(visible) => (seen[e.id] = visible)}>
             {#if seen[e.id]}
-              {#await load(e.file) then Example}<Example />{:catch err}<p class="err">{String(err)}</p>{/await}
+              {#await load(e.file) then Example}<Mount {Example} onCode={(code) => (live[e.file] = code)} />{:catch err}<p class="err">{String(err)}</p>{/await}
             {/if}
           </div>
+          {#if live[e.file] ?? codes[e.file]}<ExampleCode code={(live[e.file] ?? codes[e.file])!} file="{e.file}.svelte" />{/if}
         </article>
       {/each}
     </section>
@@ -76,9 +94,9 @@
   article.bare { margin-top: 0; }
   .card.bare { border: 0; padding: 0; min-height: 420px; place-items: start stretch; overflow: visible; margin-top: 0; }
   .card { margin-top: 20px; border: 1px solid #e8e8e8; border-radius: 16px; min-height: 240px; padding: 24px; display: grid; place-items: center; overflow: hidden; box-sizing: border-box; }
-  /* the canvas scenes are wider than the text column */
-  .wide .card { margin-inline: -52px; }
-  @media (max-width: 700px) { .wide .card { margin-inline: 0; } }
+  /* the canvas scenes are wider than the text column, and so is their code */
+  .wide .card, .wide :global(figure.code) { margin-inline: -52px; }
+  @media (max-width: 700px) { .wide .card, .wide :global(figure.code) { margin-inline: 0; } }
   .err { color: #c00; font-size: 12px; }
   aside { position: fixed; left: 28px; top: 230px; display: grid; gap: 14px; }
   aside a { display: block; width: 12px; height: 2px; background: #ccc; border-radius: 1px; transition: width 0.2s, background 0.2s; }
